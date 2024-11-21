@@ -11,6 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { getDatabase, ref, onValue } from 'firebase/database';
+import { useRouter } from 'expo-router';
 
 // Define the Product type
 interface Product {
@@ -28,6 +29,7 @@ export default function ProductsScreen() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const windowWidth = Dimensions.get('window').width;
   const isWeb = Platform.OS === 'web';
+  const router = useRouter();
 
   useEffect(() => {
     const db = getDatabase();
@@ -61,6 +63,9 @@ export default function ProductsScreen() {
     });
     setProducts(filteredProducts);
   }, [searchQuery, allProducts]);
+  const handleBidPress = (productId: string) => {
+    router.push(`./(bid)/bid?productId=${productId}`);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -109,7 +114,7 @@ export default function ProductsScreen() {
               </Text>
               <TouchableOpacity 
                 style={styles.bidButton}
-                onPress={() => {/* Handle bid */}}
+                onPress={() => handleBidPress(product.id)}
               >
                 <Text style={styles.bidButtonText}>Bid Now</Text>
               </TouchableOpacity>
