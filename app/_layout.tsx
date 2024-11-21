@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { router } from 'expo-router';
+import '../config/firebaseConfig';
 
 export default function RootLayout() {
   useEffect(() => {

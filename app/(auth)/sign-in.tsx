@@ -26,13 +26,13 @@ export default function Login() {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log(authentication);
-      router.replace('../(tabs)/profile');
+      router.replace('/(tabs)');
     }
   }, [response]);
 
   const handleLogin = () => {
     // Add your regular login logic here
-    router.replace('../(tabs)/profile');
+    router.replace('/(tabs)');
   };
 
   const handleGoogleLogin = async () => {
