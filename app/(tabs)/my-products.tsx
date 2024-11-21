@@ -9,94 +9,70 @@ import {
   TextInput,
   Platform,
   Alert,
+  GestureResponderEvent,
 } from 'react-native';
 import { getDatabase, ref, push, set, onValue, remove } from 'firebase/database';
 import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from 'firebase/auth';
 
-interface DraftProduct {
+interface Product {
   id: string;
   name: string;
   description: string;
   images: string[];
   priceStart: number;
   priceEnd: number;
-  isPublished?: boolean;
+  userId: string;
 }
 
 export default function MyProductsScreen() {
-  const [draftProducts, setDraftProducts] = useState<DraftProduct[]>([]);
-  const [newProduct, setNewProduct] = useState<DraftProduct>({
+  const [newProduct, setNewProduct] = useState<Product>({
     id: Date.now().toString(),
     name: '',
     description: '',
     images: [],
     priceStart: 0,
     priceEnd: 0,
+    userId: ''
   });
-  const [editingProduct, setEditingProduct] = useState<DraftProduct | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const isWeb = Platform.OS === 'web';
+  const [myProducts, setMyProducts] = useState<Product[]>([]);
 
   useEffect(() => {
+    const db = getDatabase();
+    const productsRef = ref(db, 'products');
     const auth = getAuth();
+    const user = auth.currentUser;
     
-    // Add auth state listener
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      console.log('Auth state changed. User:', user?.uid);
+    console.log('MyProducts - Current user:', user?.uid); // Debug log
+    
+    onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      console.log('MyProducts - All data:', data); // Debug log
       
-      if (!user) {
-        console.log('No user logged in');
-        setDraftProducts([]);
-        return;
-      }
-
-      const db = getDatabase();
-      const draftsRef = ref(db, `userDrafts/${user.uid}`);
-      
-      const unsubscribeDB = onValue(draftsRef, (snapshot) => {
-        const data = snapshot.val();
-        console.log('Loaded drafts data:', data);
+      if (data) {
+        const productsArray = Object.entries(data).map(([id, product]: [string, any]) => ({
+          id,
+          ...product,
+        }));
         
-        if (data) {
-          const draftsArray = Object.entries(data).map(([key, value]: [string, any]) => ({
-            id: key,
-            ...value
-          }));
-          console.log('Processed drafts array:', draftsArray);
-          setDraftProducts(draftsArray);
-        } else {
-          console.log('No drafts found');
-          setDraftProducts([]);
-        }
-      }, (error) => {
-        console.error('Error loading drafts:', error);
-      });
-
-      // Cleanup database listener when auth state changes
-      return () => unsubscribeDB();
+        console.log('MyProducts - Before filter:', productsArray); // Debug log
+        
+        const userProducts = productsArray.filter(product => {
+          console.log('Comparing:', {
+            productUserId: product.userId,
+            currentUserId: user?.uid,
+            isMatch: product.userId === user?.uid
+          });
+          return product.userId === user?.uid;
+        });
+        
+        console.log('MyProducts - After filter:', userProducts); // Debug log
+        setMyProducts(userProducts);
+      }
     });
-
-    // Cleanup auth listener on unmount
-    return () => unsubscribeAuth();
-  }, []); // Empty dependency array to run only once on mount
-
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0].base64) {
-      setNewProduct(prev => ({
-        ...prev,
-        images: [...prev.images, `data:image/jpeg;base64,${result.assets[0].base64}`]
-      }));
-    }
-  };
+  }, []);
 
   const addNewProduct = async () => {
     if (!newProduct.name || !newProduct.description || newProduct.images.length === 0 || 
@@ -114,25 +90,22 @@ export default function MyProductsScreen() {
 
     try {
       const db = getDatabase();
-      const draftsRef = ref(db, `userDrafts/${user.uid}`);
-      const newDraftRef = push(draftsRef);
+      const productsRef = ref(db, 'products');
+      const newProductRef = push(productsRef);
       
-      const draftData = {
+      const productData = {
         name: newProduct.name,
         description: newProduct.description,
         images: newProduct.images,
         priceStart: newProduct.priceStart,
         priceEnd: newProduct.priceEnd,
+        userId: user.uid,
         createdAt: Date.now(),
       };
 
-      await set(newDraftRef, draftData);
-
-      // Update local state with new draft
-      setDraftProducts(prev => [...prev, {
-        id: newDraftRef.key || Date.now().toString(),
-        ...draftData
-      }]);
+      console.log('Publishing product with data:', productData); // Debug log
+      
+      await set(newProductRef, productData);
 
       // Reset form
       setNewProduct({
@@ -142,54 +115,23 @@ export default function MyProductsScreen() {
         images: [],
         priceStart: 0,
         priceEnd: 0,
+        userId: ''
       });
 
-      Alert.alert('Success', 'Product saved to drafts');
+      Alert.alert('Success', 'Product published successfully');
     } catch (error) {
-      Alert.alert('Error', 'Failed to save draft product');
-    }
-  };
-
-  const publishProduct = async (product: DraftProduct) => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert('Error', 'Please login first');
-        return;
-      }
-
-      const db = getDatabase();
-      const productsRef = ref(db, 'products');
-      const newProductRef = push(productsRef);
-      
-      await set(newProductRef, {
-        name: product.name,
-        description: product.description,
-        images: product.images,
-        priceStart: product.priceStart,
-        priceEnd: product.priceEnd,
-        userId: user.uid,
-        createdAt: Date.now(),
-      });
-
-      // Remove from draft products in database
-      const draftRef = ref(db, `userDrafts/${user.uid}/${product.id}`);
-      await remove(draftRef);
-
-      Alert.alert('Success', 'Product published successfully!');
-    } catch (error) {
+      console.error('Error publishing product:', error); // Debug error
       Alert.alert('Error', 'Failed to publish product');
     }
   };
 
-  const handleEdit = async (product: DraftProduct) => {
+  const handleEdit = async (product: Product) => {
     if (!editingProduct) {
       // Start editing
       setEditingProduct(product);
     } else {
       // Save changes
-      if (isSaving) return; // Prevent double submission
+      if (isSaving) return;
       
       try {
         setIsSaving(true);
@@ -198,44 +140,51 @@ export default function MyProductsScreen() {
         if (!user) return;
 
         const db = getDatabase();
-        const draftRef = ref(db, `userDrafts/${user.uid}/${editingProduct.id}`);
+        const productRef = ref(db, `products/${editingProduct.id}`);
         
-        await set(draftRef, {
+        await set(productRef, {
           ...editingProduct,
           updatedAt: Date.now(),
         });
 
         setEditingProduct(null);
-        Alert.alert('Success', 'Draft updated successfully');
+        Alert.alert('Success', 'Product updated successfully');
       } catch (error) {
-        Alert.alert('Error', 'Failed to update draft');
+        Alert.alert('Error', 'Failed to update product');
       } finally {
         setIsSaving(false);
       }
     }
   };
 
-  const handleSave = async () => {
-    if (!editingProduct) return;
-    
+  const pickImage = async () => {
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) return;
+      // Request permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload images.');
+        return;
+      }
 
-      const db = getDatabase();
-      const draftRef = ref(db, `userDrafts/${user.uid}/${editingProduct.id}`);
-      
-      await set(draftRef, {
-        ...editingProduct,
-        updatedAt: Date.now(),
+      // Pick the image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
       });
-      
-      setEditingProduct(null);
-      Alert.alert('Success', 'Draft updated successfully');
+
+      if (!result.canceled) {
+        // Update the product images array with the new image URI
+        setNewProduct(prev => ({
+          ...prev,
+          images: [...prev.images, result.assets[0].uri]
+        }));
+      }
     } catch (error) {
-      console.error('Error updating product:', error);
-      Alert.alert('Error', 'Failed to update draft');
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
     }
   };
 
@@ -300,120 +249,30 @@ export default function MyProductsScreen() {
         )}
 
         <TouchableOpacity style={styles.addButton} onPress={addNewProduct}>
-          <Text style={styles.addButtonText}>Add to Drafts</Text>
+          <Text style={styles.addButtonText}>Publish Product</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.draftsSection}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.draftsSectionTitle}>My Draft Products</Text>
-        </View>
-        
-        <View style={styles.gridContainer}>
-          {draftProducts.map((product) => (
-            <View
-              key={product.id}
-              style={[
-                styles.card,
-                Platform.select({
-                  web: {
-                    width: '13.5%',  // 7 cards for web
-                    margin: '0.35%',
-                  },
-                  default: {
-                    width: '44%',    // Slightly reduced for better fit
-                    margin: '3%',    // Equal margins all around
-                  }
-                })
-              ]}
-            >
-              <Image
-                source={{ uri: product.images[0] }}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-              <View style={[
-                styles.cardContent,
-                editingProduct?.id === product.id && styles.editingCardContent
-              ]}>
-                {editingProduct?.id === product.id ? (
-                  // Edit mode
-                  <View style={styles.editingContainer}>
-                    <TextInput
-                      style={styles.editInput}
-                      value={editingProduct.name}
-                      onChangeText={(text) => setEditingProduct(prev => ({ ...prev!, name: text }))}
-                    />
-                    <TextInput
-                      style={[styles.editInput, styles.editDescription]}
-                      value={editingProduct.description}
-                      multiline
-                      numberOfLines={2}
-                      onChangeText={(text) => setEditingProduct(prev => ({ ...prev!, description: text }))}
-                    />
-                    <View style={styles.priceContainer}>
-                      <TextInput
-                        style={styles.priceInput}
-                        value={editingProduct.priceStart.toString()}
-                        keyboardType="numeric"
-                        placeholder="Min"
-                        onChangeText={(text) => setEditingProduct(prev => ({ 
-                          ...prev!, 
-                          priceStart: parseFloat(text) || 0 
-                        }))}
-                      />
-                      <TextInput
-                        style={styles.priceInput}
-                        value={editingProduct.priceEnd.toString()}
-                        keyboardType="numeric"
-                        placeholder="Max"
-                        onChangeText={(text) => setEditingProduct(prev => ({ 
-                          ...prev!, 
-                          priceEnd: parseFloat(text) || 0 
-                        }))}
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  // View mode
-                  <>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {product.name}
-                    </Text>
-                    <Text style={styles.description} numberOfLines={2}>
-                      {product.description}
-                    </Text>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.priceRange}>
-                        ${product.priceStart.toLocaleString()} - ${product.priceEnd.toLocaleString()}
-                      </Text>
-                    </View>
-                  </>
-                )}
-                
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity 
-                    style={[
-                      styles.button, 
-                      styles.editButton,
-                      isSaving && styles.disabledButton  // Add disabled style
-                    ]}
-                    onPress={() => handleEdit(product)}
-                    disabled={isSaving}  // Disable button while saving
-                  >
-                    <Text style={styles.buttonText}>
-                      {editingProduct?.id === product.id 
-                        ? (isSaving ? 'Saving...' : 'Save') 
-                        : 'Edit'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.button, styles.publishButton]}
-                    onPress={() => publishProduct(product)}
-                  >
-                    <Text style={styles.publishButtonText}>Publish</Text>
-                  </TouchableOpacity>
-                </View>
+      <View style={styles.productsSection}>
+        <Text style={styles.sectionTitle}>My Published Products</Text>
+        <View style={styles.productGrid}>
+          {myProducts.map((product) => (
+            <View key={product.id} style={styles.productCard}>
+              {product.images && product.images.length > 0 && (
+                <Image
+                  source={{ uri: product.images[0] }}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{product.name}</Text>
+                <Text style={styles.productDescription} numberOfLines={2}>
+                  {product.description}
+                </Text>
+                <Text style={styles.productPrice}>
+                  ${product.priceStart} - ${product.priceEnd}
+                </Text>
               </View>
             </View>
           ))}
@@ -487,63 +346,52 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  draftsSection: {
+  productsSection: {
     padding: Platform.OS === 'web' ? 8 : 0,
   },
-  titleContainer: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  draftsSectionTitle: {
+  sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  gridContainer: {
+  productGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',  // Changed to space-between
-    padding: Platform.OS === 'web' ? 8 : 6,
+    justifyContent: 'space-between',
+    padding: 10,
   },
-  card: {
+  productCard: {
+    width: '48%',
     backgroundColor: 'white',
     borderRadius: 8,
-    overflow: 'hidden',
+    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    marginBottom: Platform.OS === 'web' ? 0 : 6,  // Add bottom margin for mobile
+    overflow: 'hidden',
   },
-  cardImage: {
+  productImage: {
     width: '100%',
-    height: Platform.OS === 'web' ? 120 : 160,  // Taller for mobile
+    height: 150,
   },
-  cardContent: {
-    padding: Platform.OS === 'web' ? 8 : 12,
-    minHeight: Platform.OS === 'web' ? 140 : 160,  // Changed height to minHeight
-    flexDirection: 'column',
-    justifyContent: 'space-between',
+  productInfo: {
+    padding: 10,
   },
-  title: {
+  productName: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 5,
   },
-  description: {
+  productDescription: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 5,
   },
-  publishButton: {
-    backgroundColor: '#FF9500',
-    padding: 8,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  publishButtonText: {
-    color: 'white',
+  productPrice: {
+    fontSize: 14,
+    color: '#2E7D32',
     fontWeight: '600',
   },
   priceContainer: {

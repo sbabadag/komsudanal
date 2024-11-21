@@ -11,7 +11,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { getDatabase, ref, onValue, push } from 'firebase/database';
+import { getDatabase, ref, onValue, get, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -26,6 +26,7 @@ interface Product {
   priceStart: number;
   priceEnd: number;
   userId: string;
+  status: 'draft' | 'published';
 }
 
 export default function ProductsScreen() {
@@ -46,21 +47,27 @@ export default function ProductsScreen() {
     const auth = getAuth();
     const user = auth.currentUser;
     
+    console.log('Current user:', user?.uid);
+    
     onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
+      console.log('All products data:', data);
+      
       if (data) {
         const productsArray = Object.entries(data).map(([id, product]: [string, any]) => ({
           id,
           ...product,
-        }));
+        }))
+        // Filter out the current user's products
+        .filter(product => {
+          if (!user) return true; // If no user is logged in, show all products
+          return product.userId !== user.uid; // Only show products that don't belong to current user
+        });
         
-        // Filter out user's own products
-        const filteredProducts = user 
-          ? productsArray.filter(product => product.userId !== user.uid)
-          : productsArray;
-          
-        setAllProducts(filteredProducts);
-        setProducts(filteredProducts);
+        console.log('Products array:', productsArray);
+        
+        setAllProducts(productsArray);
+        setProducts(productsArray);
       }
     });
   }, []);
@@ -92,6 +99,37 @@ export default function ProductsScreen() {
     }
   }, [products]); // Depend on products array changes
 
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const productsRef = ref(db, 'products');
+    
+    console.log('Main Page - Current User ID:', user.uid); // Debug log
+    
+    onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const userProductsArray = Object.entries(data)
+          .map(([id, product]: [string, any]) => ({
+            id,
+            ...product,
+          }))
+          .filter(product => {
+            console.log('Product userId:', product.userId); // Debug log
+            console.log('Current userId:', user.uid); // Debug log
+            console.log('Match?:', product.userId === user.uid); // Debug log
+            return product.userId === user.uid;
+          });
+        
+        console.log('Main Page - User Products:', userProductsArray); // Debug log
+        setUserProducts(userProductsArray);
+      }
+    });
+  }, []);
+
   const handleBid = async (productId: string) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -101,25 +139,41 @@ export default function ProductsScreen() {
       return;
     }
 
-    // Check if this is the user's own product
-    const isOwnProduct = products.some(product => 
-      product.id === productId && product.userId === user.uid
-    );
+    console.log('Bid Handler - Current User ID:', user.uid); // Debug log
+    console.log('Bid Handler - User Products:', userProducts); // Debug log
+
+    console.log('Current user ID:', user.uid);
+    console.log('All Products:', allProducts);
+
+    // Query the database directly to check for user's products
+    const db = getDatabase();
+    const productsRef = ref(db, 'products');
     
-    if (isOwnProduct) {
-      Alert.alert('Error', 'You cannot bid on your own product');
-      return;
-    }
+    get(productsRef).then((snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const userProducts = Object.entries(data)
+          .map(([id, product]: [string, any]) => ({
+            id,
+            ...product,
+          }))
+          .filter(product => product.userId === user.uid);
 
-    // Check if user has any products to offer
-    const userProducts = products.filter(product => product.userId === user.uid);
-    if (!userProducts.length && !userProducts.length) {
-      Alert.alert('Error', 'You need to add products first before placing a bid');
-      return;
-    }
+        console.log('User products found:', userProducts);
 
-    setTargetProductId(productId);
-    setModalVisible(true);
+        if (userProducts.length === 0) {
+          Alert.alert('Error', 'You need to add products first before placing a bid');
+          return;
+        }
+
+        // If we get here, user has products
+        setTargetProductId(productId);
+        setModalVisible(true);
+      }
+    }).catch((error) => {
+      console.error('Error checking products:', error);
+      Alert.alert('Error', 'Failed to check products');
+    });
   };
 
   const submitBid = async () => {
@@ -225,41 +279,46 @@ export default function ProductsScreen() {
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Products to Offer</Text>
           <ScrollView style={styles.productList}>
-            {userProducts.map(product => (
-              <TouchableOpacity
-                key={product.id}
-                style={[
-                  styles.selectableProduct,
-                  selectedProducts.includes(product.id) && styles.selectedProduct
-                ]}
-                onPress={() => toggleProductSelection(product.id)}
-              >
-                <Image
-                  source={{ uri: product.images[0] }}
-                  style={styles.productImage}
-                />
-                <Text style={styles.productName}>{product.name}</Text>
-                <View style={styles.checkbox}>
-                  {selectedProducts.includes(product.id) && (
-                    <Ionicons name="checkmark" size={24} color="#007AFF" />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-            {userProducts.length === 0 && (
+            {userProducts.length > 0 ? (
+              userProducts.map(product => (
+                <TouchableOpacity
+                  key={product.id}
+                  style={[
+                    styles.selectableProduct,
+                    selectedProducts.includes(product.id) && styles.selectedProduct
+                  ]}
+                  onPress={() => toggleProductSelection(product.id)}
+                >
+                  <Image
+                    source={{ uri: product.images[0] }}
+                    style={styles.productImage}
+                  />
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <View style={styles.checkbox}>
+                    {selectedProducts.includes(product.id) && (
+                      <Ionicons name="checkmark" size={24} color="#007AFF" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
               <Text style={styles.noProductsText}>No products available to offer</Text>
             )}
           </ScrollView>
           <View style={styles.modalButtons}>
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={() => setModalVisible(false)}
+              onPress={() => {
+                setModalVisible(false);
+                setSelectedProducts([]);
+              }}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.submitButton}
               onPress={submitBid}
+              disabled={selectedProducts.length === 0}
             >
               <Text style={styles.submitButtonText}>Submit Bid</Text>
             </TouchableOpacity>
