@@ -108,67 +108,75 @@ export default function MyBidsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        myBids.map(bid => {
-          const targetProduct = products[bid.targetProductId];
-          if (!targetProduct) return null;
+        <View style={styles.cardsContainer}>
+          {myBids.map(bid => {
+            const targetProduct = products[bid.targetProductId];
+            if (!targetProduct) return null;
 
-          return (
-            <View key={bid.id} style={styles.bidCard}>
-              {/* Target Product */}
-              <View style={styles.targetProduct}>
-                <Text style={styles.sectionLabel}>Product You Want</Text>
-                <View style={styles.productInfo}>
+            return (
+              <View key={bid.id} style={styles.bidCard}>
+                <TouchableOpacity 
+                  style={styles.cardContent}
+                  onPress={() => router.push({
+                    pathname: "/(bid)/bid-details",
+                    params: { id: bid.targetProductId }
+                  })}
+                >
                   <Image
                     source={{ uri: targetProduct.images[0] }}
-                    style={styles.productImage}
+                    style={styles.mainImage}
                   />
-                  <View style={styles.productDetails}>
-                    <Text style={styles.productName}>{targetProduct.name}</Text>
-                    <Text style={styles.productPrice}>
+                  
+                  <View style={styles.cardBody}>
+                    <Text style={styles.productName} numberOfLines={1}>
+                      {targetProduct.name}
+                    </Text>
+                    
+                    <Text style={styles.priceText}>
                       ${targetProduct.priceStart} - ${targetProduct.priceEnd}
                     </Text>
-                  </View>
-                </View>
-              </View>
 
-              {/* Offered Products */}
-              <View style={styles.offeredProducts}>
-                <Text style={styles.sectionLabel}>Your Offer</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {bid.offeredProducts.map(productId => {
-                    const product = products[productId];
-                    if (!product) return null;
-
-                    return (
-                      <View key={productId} style={styles.offeredProductCard}>
-                        <Image
-                          source={{ uri: product.images[0] }}
-                          style={styles.offeredProductImage}
-                        />
-                        <Text style={styles.offeredProductName} numberOfLines={1}>
-                          {product.name}
-                        </Text>
+                    <View style={styles.offeredProductsRow}>
+                      <Text style={styles.offeredLabel}>Offered:</Text>
+                      <View style={styles.offeredThumbnails}>
+                        {bid.offeredProducts.slice(0, 3).map(productId => {
+                          const product = products[productId];
+                          if (!product) return null;
+                          return (
+                            <Image
+                              key={productId}
+                              source={{ uri: product.images[0] }}
+                              style={styles.thumbnailImage}
+                            />
+                          );
+                        })}
+                        {bid.offeredProducts.length > 3 && (
+                          <View style={styles.moreIndicator}>
+                            <Text style={styles.moreIndicatorText}>
+                              +{bid.offeredProducts.length - 3}
+                            </Text>
+                          </View>
+                        )}
                       </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+                    </View>
 
-              {/* Bid Status and Actions */}
-              <View style={styles.bidFooter}>
-                {renderBidStatus(bid.status)}
-                {bid.status === 'pending' && (
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => handleCancelBid(bid.id)}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel Bid</Text>
-                  </TouchableOpacity>
-                )}
+                    <View style={styles.cardFooter}>
+                      {renderBidStatus(bid.status)}
+                      {bid.status === 'pending' && (
+                        <TouchableOpacity
+                          style={styles.cancelButton}
+                          onPress={() => handleCancelBid(bid.id)}
+                        >
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
               </View>
-            </View>
-          );
-        })
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
@@ -186,74 +194,80 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  cardsContainer: {
+    padding: 8,
+  },
   bidCard: {
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
   },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#666',
-  },
-  targetProduct: {
-    marginBottom: 16,
-  },
-  productInfo: {
+  cardContent: {
     flexDirection: 'row',
-    alignItems: 'center',
+    padding: 12,
   },
-  productImage: {
-    width: 80,
-    height: 80,
+  mainImage: {
+    width: 120,
+    height: 120,
     borderRadius: 8,
   },
-  productDetails: {
+  cardBody: {
     flex: 1,
     marginLeft: 12,
+    justifyContent: 'space-between',
   },
   productName: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
-  productPrice: {
-    fontSize: 14,
+  priceText: {
+    fontSize: 15,
     color: '#2E7D32',
     fontWeight: '500',
+    marginBottom: 8,
   },
-  offeredProducts: {
-    marginBottom: 16,
+  offeredProductsRow: {
+    marginBottom: 8,
   },
-  offeredProductCard: {
-    width: 100,
-    marginRight: 12,
-  },
-  offeredProductImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
+  offeredLabel: {
+    fontSize: 13,
+    color: '#666',
     marginBottom: 4,
   },
-  offeredProductName: {
-    fontSize: 12,
-    textAlign: 'center',
+  offeredThumbnails: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  bidFooter: {
+  thumbnailImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  moreIndicator: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreIndicatorText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
   },
   statusPending: {
     backgroundColor: '#FFF3E0',
@@ -287,12 +301,13 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#FFEBEE',
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 6,
   },
   cancelButtonText: {
     color: '#C62828',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   emptyContainer: {

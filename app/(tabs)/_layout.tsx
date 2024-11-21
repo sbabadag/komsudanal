@@ -1,41 +1,14 @@
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import MyProductsScreen from './my-products';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import RootLayout from '../../app/_layout'; // Adjust the import path as necessary
+import ProfileDrawer from '../DrawerNavigator';
+import { DrawerLayout } from 'react-native-gesture-handler';
+import { Animated } from 'react-native';
 
-export default function TabLayout() {
+export default function App() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: 'gray',
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="my-products"
-        options={{
-          title: 'My Products',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+    <NavigationContainer>
+      <ProfileDrawer />
+    </NavigationContainer>
   );
 }

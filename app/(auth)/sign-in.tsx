@@ -28,7 +28,7 @@ export default function Login() {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log(authentication);
-      router.replace('../(tabs)/profile');
+      router.replace('/(tabs)');
     }
   }, [response]);
 
@@ -48,7 +48,7 @@ export default function Login() {
       );
 
       if (userCredential.user) {
-        router.replace('../(tabs)/profile');
+        router.replace('/(tabs)');
       }
     } catch (error: any) {
       let errorMessage = 'Wrong email or password';

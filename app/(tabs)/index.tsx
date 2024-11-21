@@ -9,8 +9,12 @@ import {
   TouchableOpacity,
   Platform,
   TextInput,
+  Alert,
 } from 'react-native';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, push } from 'firebase/database';
+import { getAuth } from 'firebase/auth';
+import Modal from 'react-native-modal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 
 // Define the Product type
@@ -21,19 +25,26 @@ interface Product {
   images: string[];
   priceStart: number;
   priceEnd: number;
+  userId: string;
 }
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [targetProductId, setTargetProductId] = useState<string | null>(null);
   const windowWidth = Dimensions.get('window').width;
   const isWeb = Platform.OS === 'web';
   const router = useRouter();
+  const [userProducts, setUserProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     const db = getDatabase();
     const productsRef = ref(db, 'products');
+    const auth = getAuth();
+    const user = auth.currentUser;
     
     onValue(productsRef, (snapshot) => {
       const data = snapshot.val();
@@ -42,8 +53,14 @@ export default function ProductsScreen() {
           id,
           ...product,
         }));
-        setAllProducts(productsArray);
-        setProducts(productsArray);
+        
+        // Filter out user's own products
+        const filteredProducts = user 
+          ? productsArray.filter(product => product.userId !== user.uid)
+          : productsArray;
+          
+        setAllProducts(filteredProducts);
+        setProducts(filteredProducts);
       }
     });
   }, []);
@@ -63,12 +80,89 @@ export default function ProductsScreen() {
     });
     setProducts(filteredProducts);
   }, [searchQuery, allProducts]);
-  const handleBidPress = (productId: string) => {
-    router.push(`./(bid)/bid?productId=${productId}`);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    if (user && products.length > 0) {
+      // Filter products owned by the current user
+      const userOwnedProducts = products.filter(product => product.userId === user.uid);
+      setUserProducts(userOwnedProducts);
+    }
+  }, [products]); // Depend on products array changes
+
+  const handleBid = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    if (!user) {
+      Alert.alert('Error', 'Please login to place a bid');
+      return;
+    }
+
+    // Check if this is the user's own product
+    const isOwnProduct = products.some(product => 
+      product.id === productId && product.userId === user.uid
+    );
+    
+    if (isOwnProduct) {
+      Alert.alert('Error', 'You cannot bid on your own product');
+      return;
+    }
+
+    // Check if user has any products to offer
+    const userProducts = products.filter(product => product.userId === user.uid);
+    if (!userProducts.length && !userProducts.length) {
+      Alert.alert('Error', 'You need to add products first before placing a bid');
+      return;
+    }
+
+    setTargetProductId(productId);
+    setModalVisible(true);
+  };
+
+  const submitBid = async () => {
+    if (!selectedProducts.length) {
+      Alert.alert('Error', 'Please select at least one product to offer');
+      return;
+    }
+
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user || !targetProductId) return;
+
+      const db = getDatabase();
+      const newBidRef = ref(db, `userBids/${user.uid}`);
+      
+      await push(newBidRef, {
+        targetProductId,
+        offeredProducts: selectedProducts,
+        status: 'pending',
+        createdAt: Date.now()
+      });
+
+      setModalVisible(false);
+      setSelectedProducts([]);
+      setTargetProductId(null);
+      Alert.alert('Success', 'Bid placed successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to place bid');
+      console.error(error);
+    }
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProducts(prev => 
+      prev.includes(productId)
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -78,7 +172,7 @@ export default function ProductsScreen() {
         />
       </View>
       
-      <View style={styles.gridContainer}>
+      <ScrollView contentContainerStyle={styles.gridContainer}>
         {products.map((product) => (
           <View
             key={product.id}
@@ -114,15 +208,65 @@ export default function ProductsScreen() {
               </Text>
               <TouchableOpacity 
                 style={styles.bidButton}
-                onPress={() => handleBidPress(product.id)}
+                onPress={() => handleBid(product.id)}
               >
-                <Text style={styles.bidButtonText}>Bid Now</Text>
+                <Text style={styles.bidButtonText}>Place Bid</Text>
               </TouchableOpacity>
             </View>
           </View>
         ))}
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={() => setModalVisible(false)}
+        style={styles.modal}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Select Products to Offer</Text>
+          <ScrollView style={styles.productList}>
+            {userProducts.map(product => (
+              <TouchableOpacity
+                key={product.id}
+                style={[
+                  styles.selectableProduct,
+                  selectedProducts.includes(product.id) && styles.selectedProduct
+                ]}
+                onPress={() => toggleProductSelection(product.id)}
+              >
+                <Image
+                  source={{ uri: product.images[0] }}
+                  style={styles.productImage}
+                />
+                <Text style={styles.productName}>{product.name}</Text>
+                <View style={styles.checkbox}>
+                  {selectedProducts.includes(product.id) && (
+                    <Ionicons name="checkmark" size={24} color="#007AFF" />
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+            {userProducts.length === 0 && (
+              <Text style={styles.noProductsText}>No products available to offer</Text>
+            )}
+          </ScrollView>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={submitBid}
+            >
+              <Text style={styles.submitButtonText}>Submit Bid</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -185,6 +329,7 @@ const styles = StyleSheet.create({
   bidButtonText: {
     color: 'white',
     fontWeight: '600',
+    fontSize: 14,
   },
   searchContainer: {
     padding: 16,
@@ -198,5 +343,89 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     fontSize: 16,
+  },
+  modal: {
+    margin: 0,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  productList: {
+    maxHeight: 400,
+  },
+  selectableProduct: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  selectedProduct: {
+    backgroundColor: '#f0f0f0',
+  },
+  productImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 10,
+  },
+  productName: {
+    flex: 1,
+    fontSize: 16,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    padding: 15,
+    marginRight: 10,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+  },
+  submitButton: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+  },
+  cancelButtonText: {
+    textAlign: 'center',
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  submitButtonText: {
+    textAlign: 'center',
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noProductsText: {
+    textAlign: 'center',
+    padding: 20,
+    color: '#666',
   },
 });
