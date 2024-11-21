@@ -35,6 +35,7 @@ export default function MyProductsScreen() {
     priceEnd: 0,
   });
   const [editingProduct, setEditingProduct] = useState<DraftProduct | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
@@ -188,7 +189,10 @@ export default function MyProductsScreen() {
       setEditingProduct(product);
     } else {
       // Save changes
+      if (isSaving) return; // Prevent double submission
+      
       try {
+        setIsSaving(true);
         const auth = getAuth();
         const user = auth.currentUser;
         if (!user) return;
@@ -205,6 +209,8 @@ export default function MyProductsScreen() {
         Alert.alert('Success', 'Draft updated successfully');
       } catch (error) {
         Alert.alert('Error', 'Failed to update draft');
+      } finally {
+        setIsSaving(false);
       }
     }
   };
@@ -236,7 +242,7 @@ export default function MyProductsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.addProductSection}>
-        <Text style={styles.sectionTitle}>Add New Product</Text>
+        <Text style={styles.formSectionTitle}>Add New Product</Text>
         
         <TextInput
           style={styles.input}
@@ -299,22 +305,26 @@ export default function MyProductsScreen() {
       </View>
 
       <View style={styles.draftsSection}>
-        <Text style={styles.sectionTitle}>My Draft Products</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.draftsSectionTitle}>My Draft Products</Text>
+        </View>
         
-        <View style={[
-          styles.gridContainer,
-          { gap: 16 }
-        ]}>
+        <View style={styles.gridContainer}>
           {draftProducts.map((product) => (
             <View
               key={product.id}
               style={[
                 styles.card,
-                {
-                  width: isWeb 
-                    ? `${100/7}%` // 7 columns for web
-                    : `${100/3}%` // 3 columns for mobile
-                }
+                Platform.select({
+                  web: {
+                    width: '13.5%',  // 7 cards for web
+                    margin: '0.35%',
+                  },
+                  default: {
+                    width: '44%',    // Slightly reduced for better fit
+                    margin: '3%',    // Equal margins all around
+                  }
+                })
               ]}
             >
               <Image
@@ -322,17 +332,20 @@ export default function MyProductsScreen() {
                 style={styles.cardImage}
                 resizeMode="cover"
               />
-              <View style={styles.cardContent}>
+              <View style={[
+                styles.cardContent,
+                editingProduct?.id === product.id && styles.editingCardContent
+              ]}>
                 {editingProduct?.id === product.id ? (
                   // Edit mode
-                  <>
+                  <View style={styles.editingContainer}>
                     <TextInput
-                      style={[styles.input, styles.editInput]}
+                      style={styles.editInput}
                       value={editingProduct.name}
                       onChangeText={(text) => setEditingProduct(prev => ({ ...prev!, name: text }))}
                     />
                     <TextInput
-                      style={[styles.input, styles.editInput]}
+                      style={[styles.editInput, styles.editDescription]}
                       value={editingProduct.description}
                       multiline
                       numberOfLines={2}
@@ -340,7 +353,7 @@ export default function MyProductsScreen() {
                     />
                     <View style={styles.priceContainer}>
                       <TextInput
-                        style={[styles.input, styles.priceInput]}
+                        style={styles.priceInput}
                         value={editingProduct.priceStart.toString()}
                         keyboardType="numeric"
                         placeholder="Min"
@@ -350,7 +363,7 @@ export default function MyProductsScreen() {
                         }))}
                       />
                       <TextInput
-                        style={[styles.input, styles.priceInput]}
+                        style={styles.priceInput}
                         value={editingProduct.priceEnd.toString()}
                         keyboardType="numeric"
                         placeholder="Max"
@@ -360,7 +373,7 @@ export default function MyProductsScreen() {
                         }))}
                       />
                     </View>
-                  </>
+                  </View>
                 ) : (
                   // View mode
                   <>
@@ -380,11 +393,18 @@ export default function MyProductsScreen() {
                 
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity 
-                    style={[styles.button, styles.editButton]}
+                    style={[
+                      styles.button, 
+                      styles.editButton,
+                      isSaving && styles.disabledButton  // Add disabled style
+                    ]}
                     onPress={() => handleEdit(product)}
+                    disabled={isSaving}  // Disable button while saving
                   >
                     <Text style={styles.buttonText}>
-                      {editingProduct?.id === product.id ? 'Save' : 'Edit'}
+                      {editingProduct?.id === product.id 
+                        ? (isSaving ? 'Saving...' : 'Save') 
+                        : 'Edit'}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
@@ -419,7 +439,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  sectionTitle: {
+  formSectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
@@ -468,12 +488,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   draftsSection: {
-    padding: 16,
+    padding: Platform.OS === 'web' ? 8 : 0,
+  },
+  titleContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  draftsSectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',  // Changed to space-between
+    padding: Platform.OS === 'web' ? 8 : 6,
   },
   card: {
     backgroundColor: 'white',
@@ -484,13 +514,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    marginBottom: Platform.OS === 'web' ? 0 : 6,  // Add bottom margin for mobile
   },
   cardImage: {
     width: '100%',
-    height: 150,
+    height: Platform.OS === 'web' ? 120 : 160,  // Taller for mobile
   },
   cardContent: {
-    padding: 12,
+    padding: Platform.OS === 'web' ? 8 : 12,
+    minHeight: Platform.OS === 'web' ? 140 : 160,  // Changed height to minHeight
+    flexDirection: 'column',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 16,
@@ -520,14 +554,22 @@ const styles = StyleSheet.create({
   },
   priceInput: {
     flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 12,
     marginHorizontal: 4,
-    height: 32,
-    padding: 4,
-    fontSize: 11,
-    minWidth: 50,
   },
   editInput: {
-    height: 100,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 14,
+  },
+  editDescription: {
+    minHeight: 60,
     textAlignVertical: 'top',
   },
   buttonContainer: {
@@ -553,5 +595,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2E7D32',
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  editingCardContent: {
+    height: 'auto',  // Allow content to expand when editing
+    paddingBottom: 16,
+  },
+  editingContainer: {
+    flex: 1,
+    gap: 8,
   },
 });

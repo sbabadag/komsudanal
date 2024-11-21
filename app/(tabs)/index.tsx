@@ -73,20 +73,23 @@ export default function ProductsScreen() {
         />
       </View>
       
-      <View style={[
-        styles.gridContainer,
-        { gap: 16 }
-      ]}>
+      <View style={styles.gridContainer}>
         {products.map((product) => (
           <View
             key={product.id}
             style={[
               styles.card,
-              {
-                width: isWeb 
-                  ? `${(100/7)}%` // 7 columns for web
-                  : `${(100/3)}%` // 3 columns for mobile
-              }
+              Platform.select({
+                web: {
+                  width: '13.5%',
+                  margin: '0.35%',
+                },
+                default: {
+                  width: '46%',
+                  marginHorizontal: '2%',
+                  marginBottom: 16,
+                }
+              })
             ]}
           >
             <Image
@@ -126,9 +129,9 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    justifyContent: 'center',
-    gap: 16,
+    justifyContent: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
   },
   card: {
     backgroundColor: 'white',
@@ -139,15 +142,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    margin: 0,
   },
   image: {
     width: '100%',
-    height: 150,
+    height: Platform.OS === 'web' ? 120 : 160,
   },
   cardContent: {
-    padding: 12,
-    height: 160,
+    padding: Platform.OS === 'web' ? 8 : 12,
+    height: Platform.OS === 'web' ? 140 : 160,
     flexDirection: 'column',
     justifyContent: 'space-between',
   },

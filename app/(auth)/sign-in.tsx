@@ -1,8 +1,9 @@
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
 import React, { useState } from 'react';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 // Make sure to register your app and get these credentials from Google Cloud Console
 const GOOGLE_CLIENT_ID = "817455873090-n59323uc9ffbd5vm92h3es0kbtbbg84g.apps.googleusercontent.com";
@@ -11,8 +12,9 @@ const GOOGLE_IOS_CLIENT_ID = "817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl.apps
 WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
+  const [isLoading, setIsLoading] = useState(false);
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: '',
   });
 
@@ -26,13 +28,50 @@ export default function Login() {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log(authentication);
-      router.replace('/(tabs)');
+      router.replace('../(tabs)/profile');
     }
   }, [response]);
 
-  const handleLogin = () => {
-    // Add your regular login logic here
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    if (!credentials.email || !credentials.password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const auth = getAuth();
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        credentials.email,
+        credentials.password
+      );
+
+      if (userCredential.user) {
+        router.replace('../(tabs)/profile');
+      }
+    } catch (error: any) {
+      let errorMessage = 'Wrong email or password';
+      
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later';
+          break;
+      }
+      
+      Alert.alert('Login Failed', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -53,14 +92,16 @@ export default function Login() {
 
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={styles.label}>Email</Text>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                value={credentials.username}
-                onChangeText={(text) => setCredentials({ ...credentials, username: text })}
-                placeholder="Enter your username"
+                value={credentials.email}
+                onChangeText={(text) => setCredentials({ ...credentials, email: text })}
+                placeholder="Enter your email"
                 autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
                 placeholderTextColor="#A0A0A0"
               />
             </View>
@@ -84,8 +125,17 @@ export default function Login() {
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <Text style={styles.loginButtonText}>Sign In</Text>
+          <TouchableOpacity 
+            style={[
+              styles.loginButton,
+              isLoading && { opacity: 0.7 }
+            ]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            <Text style={styles.loginButtonText}>
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.divider}>
