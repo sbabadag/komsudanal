@@ -1,431 +1,242 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   Alert,
-  ScrollView,
-  Image,
+  ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { getDatabase, ref, onValue, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
-import { getDatabase, ref, push, set, onValue, get } from 'firebase/database';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-interface Offer {
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  images: string[];
+  priceStart: number;
+  priceEnd: number;
   userId: string;
-  productId: string;
-  offeredProductId: string;
-  createdAt: number;
-  userFullName: string;
-  status: 'pending' | 'accepted' | 'rejected';
 }
 
-interface BidPackage {
+interface Bid {
+  id: string;
   targetProductId: string;
-  offeredProducts: string[];  // Array of product IDs
+  offeredProducts: string[];
   status: 'pending' | 'accepted' | 'rejected';
+  createdAt: number;
+  userId: string;
 }
 
 export default function BidScreen() {
-  const params = useLocalSearchParams();
-  const router = useRouter();
-  const [isOffering, setIsOffering] = useState(false);
-  const [targetProduct, setTargetProduct] = useState<any>(null);
-  const [myPublishedProducts, setMyPublishedProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [targetProductId, setTargetProductId] = useState<string | null>(null);
+  const [userProducts, setUserProducts] = useState<Product[]>([]);
+  const auth = getAuth();
+  const user = auth.currentUser;
 
   useEffect(() => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    
-    if (!user) {
-      Alert.alert('Login Required', 'Please login to make a bid');
-      router.back();
-      return;
-    }
-
-    // Load target product
     const db = getDatabase();
-    const productRef = ref(db, `products/${params.productId}`);
-    
-    onValue(productRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setTargetProduct({ id: params.productId, ...data });
-      }
-    });
-
-    // Load user's published products from main products collection
     const productsRef = ref(db, 'products');
-    onValue(productsRef, (snapshot) => {
+
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      setLoading(true);
       const data = snapshot.val();
-      if (data) {
-        const publishedProducts = Object.entries(data)
-          .map(([key, value]: [string, any]) => ({
-            id: key,
-            ...value
-          }))
-          .filter(product => product.userId === user.uid); // Only user's products
-        
-        setMyPublishedProducts(publishedProducts);
-      }
-    });
-  }, [params.productId]);
-
-  const handleExchange = (productId: string) => {
-    setSelectedProducts(prev => {
-      if (prev.includes(productId)) {
-        return prev.filter(id => id !== productId);
-      }
-      return [...prev, productId];
-    });
-  };
-
-  const handleCreateBid = async () => {
-    if (selectedProducts.length === 0 || isSubmitting) return;
-
-    try {
-      setIsSubmitting(true);
-      const auth = getAuth();
-      const user = auth.currentUser;
-      
-      if (!user) {
-        Alert.alert('Login Required', 'Please login to make a bid');
+      if (!data) {
+        setProducts([]);
+        setLoading(false);
         return;
       }
 
-      const db = getDatabase();
-      const bidsRef = ref(db, `userBids/${user.uid}`);
-      const newBidRef = push(bidsRef);
+      const allProducts: Product[] = [];
       
-      const bidPackage: BidPackage = {
-        targetProductId: params.productId as string,
-        offeredProducts: selectedProducts,
-        status: 'pending'
-      };
+      // Iterate through each user's products
+      Object.keys(data).forEach((userId) => {
+        const userProducts = data[userId];
+        
+        if (userProducts && typeof userProducts === 'object') {
+          Object.keys(userProducts).forEach((productId) => {
+            const product = userProducts[productId];
+            
+            // Only include if:
+            // 1. Product exists
+            // 2. Not current user's product
+            if (product && (!user || userId !== user.uid)) {
+              allProducts.push({
+                ...product,
+                id: productId,
+                userId: userId
+              });
+            }
+          });
+        }
+      });
 
-      await set(newBidRef, bidPackage);
-      Alert.alert('Success', 'Bid package created successfully!');
-      router.back();
+      console.log('Filtered products:', allProducts);
+      setProducts(allProducts);
+      setLoading(false);
+    }, (error) => {
+      console.error('Database error:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []); // Empty dependency array to run only once
+
+  // Fetch user's products for bidding
+  useEffect(() => {
+    if (!user) return;
+
+    const db = getDatabase();
+    const userProductsRef = ref(db, `products/${user.uid}`);
+
+    const unsubscribe = onValue(userProductsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const userProductsArray = Object.keys(data).map((productId) => ({
+          ...data[productId],
+          id: productId,
+          userId: user.uid,
+        }));
+        setUserProducts(userProductsArray);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]); // Empty dependency array to run only once
+
+  const handleBidSubmit = async () => {
+    if (!user || !targetProductId || selectedProducts.length === 0) {
+      Alert.alert('Error', 'Please select a product to bid on and offer at least one product.');
+      return;
+    }
+
+    const db = getDatabase();
+    const bidsRef = ref(db, 'bids');
+    const newBidRef = push(bidsRef);
+
+    const newBid: Bid = {
+      id: newBidRef.key!,
+      targetProductId,
+      offeredProducts: selectedProducts,
+      status: 'pending',
+      createdAt: Date.now(),
+      userId: user.uid,
+    };
+
+    try {
+      await set(newBidRef, newBid);
+      Alert.alert('Success', 'Your bid has been submitted.');
+      setSelectedProducts([]);
+      setTargetProductId(null);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create bid package');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error submitting bid:', error);
+      Alert.alert('Error', 'There was an error submitting your bid. Please try again.');
     }
   };
 
+  if (loading) {
+    return <ActivityIndicator size="large" color="#0000ff" />;
+  }
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        {/* Target Product Card */}
-        <View style={styles.targetSection}>
-          <Text style={styles.sectionTitle}>Product You Want</Text>
-          {targetProduct && (
-            <View style={styles.targetCard}>
-              <Image
-                source={{ uri: targetProduct.images[0] }}
-                style={styles.targetImage}
-              />
-              <View style={styles.targetInfo}>
-                <Text style={styles.targetName}>{targetProduct.name}</Text>
-                <Text style={styles.targetDescription} numberOfLines={2}>
-                  {targetProduct.description}
-                </Text>
-                <Text style={styles.targetPrice}>
-                  ${targetProduct.priceStart} - ${targetProduct.priceEnd}
-                </Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Selected Products for Bid */}
-        {selectedProducts.length > 0 && (
-          <>
-            <View style={styles.divider}>
-              <Text style={styles.dividerText}>Selected for Exchange</Text>
-            </View>
-            <View style={styles.selectedProductsSection}>
-              {selectedProducts.map(productId => {
-                const product = myPublishedProducts.find(p => p.id === productId);
-                return (
-                  <View key={productId} style={styles.selectedProductCard}>
-                    <Image
-                      source={{ uri: product.images[0] }}
-                      style={styles.selectedProductImage}
-                    />
-                    <View style={styles.selectedProductInfo}>
-                      <Text style={styles.selectedProductName}>{product.name}</Text>
-                      <TouchableOpacity
-                        onPress={() => handleExchange(productId)}
-                        style={styles.removeButton}
-                      >
-                        <Text style={styles.removeButtonText}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
-
-        {/* Available Published Products */}
-        <View style={styles.divider}>
-          <Text style={styles.dividerText}>Your Published Products</Text>
-        </View>
-        
-        <View style={styles.productsGrid}>
-          {myPublishedProducts.length > 0 ? (
-            myPublishedProducts.map(product => (
-              <View key={product.id} style={styles.productCard}>
-                <Image
-                  source={{ uri: product.images[0] }}
-                  style={styles.productImage}
-                />
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName} numberOfLines={1}>
-                    {product.name}
-                  </Text>
-                  <Text style={styles.productDescription} numberOfLines={2}>
-                    {product.description}
-                  </Text>
-                  <Text style={styles.productPrice}>
-                    ${product.priceStart} - ${product.priceEnd}
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.exchangeButton,
-                      selectedProducts.includes(product.id) && styles.selectedButton
-                    ]}
-                    onPress={() => handleExchange(product.id)}
-                  >
-                    <Text style={[
-                      styles.exchangeButtonText,
-                      selectedProducts.includes(product.id) && styles.selectedButtonText
-                    ]}>
-                      {selectedProducts.includes(product.id) ? 'Selected' : 'Exchange'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          ) : (
-            <View style={styles.noProductsContainer}>
-              <Text style={styles.noProductsText}>
-                You don't have any published products yet
-              </Text>
-              <TouchableOpacity
-                style={styles.publishButton}
-                onPress={() => router.push('/(tabs)/my-products')}
-              >
-                <Text style={styles.publishButtonText}>
-                  Go to My Products
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Submit Bid Button */}
-        {selectedProducts.length > 0 && (
+    <View style={{ flex: 1 }}>
+      <ScrollView>
+        {products.map((product) => (
           <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.disabledButton]}
-            onPress={handleCreateBid}
-            disabled={isSubmitting}
+            key={product.id}
+            style={[
+              styles.selectableProduct,
+              selectedProducts.includes(product.id) && styles.selectedProduct
+            ]}
+            onPress={() => {
+              setSelectedProducts(prev => 
+                prev.includes(product.id)
+                  ? prev.filter(id => id !== product.id)
+                  : [...prev, product.id]
+              );
+            }}
           >
-            <Text style={styles.submitButtonText}>
-              {isSubmitting ? 'Creating Bid...' : 'Submit Exchange Offer'}
-            </Text>
+            <Image
+              source={{ uri: product.images[0] }}
+              style={styles.productImage}
+            />
+            <View style={styles.productInfo}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productPrice}>
+                ${product.priceStart} - ${product.priceEnd}
+              </Text>
+            </View>
+            <View style={styles.checkbox}>
+              {selectedProducts.includes(product.id) && (
+                <Ionicons name="checkmark" size={24} color="#007AFF" />
+              )}
+            </View>
           </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+        ))}
+      </ScrollView>
+      <TouchableOpacity
+        style={styles.bidButton}
+        onPress={() => setTargetProductId('some-product-id')} // Replace with actual product selection logic
+      >
+        <Text style={styles.bidButtonText}>Select Product to Bid On</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.publishButton}
+        onPress={handleBidSubmit}
+      >
+        <Text style={styles.publishButtonText}>Submit Bid</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    padding: 16,
-  },
-  targetSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  targetCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  targetImage: {
-    width: '100%',
-    height: 200,
-  },
-  targetInfo: {
-    padding: 16,
-  },
-  targetName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  targetDescription: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 12,
-  },
-  targetPrice: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 12,
-  },
-  divider: {
+  selectableProduct: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    padding: 10,
+    margin: 10,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 5,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ddd',
-  },
-  dividerText: {
-    paddingHorizontal: 16,
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectedProductsSection: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  selectedProductCard: {
-    width: '46%',  // 2 cards per row with spacing
-    backgroundColor: 'white',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  selectedProductImage: {
-    width: '100%',
-    height: 120,
-  },
-  selectedProductInfo: {
-    padding: 12,
-    justifyContent: 'space-between',
-    minHeight: 140,
-  },
-  selectedProductName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  removeButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  removeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  productsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  productCard: {
-    width: '46%',  // 2 cards per row with spacing
-    backgroundColor: 'white',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: 'transparent',
+  selectedProduct: {
+    backgroundColor: '#e0e0e0',
   },
   productImage: {
-    width: '100%',
-    height: 120,
+    width: 50,
+    height: 50,
+    marginRight: 10,
   },
   productInfo: {
-    padding: 12,
-    justifyContent: 'space-between',
-    minHeight: 140,
+    flex: 1,
   },
   productName: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  productDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontWeight: 'bold',
   },
   productPrice: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    color: '#888',
   },
-  exchangeButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginTop: 8,
+  checkbox: {
+    marginLeft: 10,
   },
-  selectedButton: {
+  bidButton: {
+    padding: 15,
     backgroundColor: '#007AFF',
-  },
-  exchangeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  selectedButtonText: {
-    color: 'white',
-  },
-  noProductsContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  noProductsText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
+  bidButtonText: {
+    color: '#fff',
+    fontSize: 18,
   },
   publishButton: {
     backgroundColor: '#007AFF',
@@ -436,22 +247,6 @@ const styles = StyleSheet.create({
   },
   publishButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.6,
+    fontSize: 16,
   },
 });

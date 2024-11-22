@@ -7,9 +7,9 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Platform,
   Alert,
-  GestureResponderEvent,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { getDatabase, ref, push, set, onValue, remove } from 'firebase/database';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,260 +23,270 @@ interface Product {
   priceStart: number;
   priceEnd: number;
   userId: string;
+  status: 'draft' | 'published';
 }
 
 export default function MyProductsScreen() {
-  const [newProduct, setNewProduct] = useState<Product>({
-    id: Date.now().toString(),
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
-    images: [],
+    images: [] as string[],
     priceStart: 0,
     priceEnd: 0,
-    userId: ''
+    status: 'published' as 'draft' | 'published',
   });
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [myProducts, setMyProducts] = useState<Product[]>([]);
 
   useEffect(() => {
-    const db = getDatabase();
-    const productsRef = ref(db, 'products');
     const auth = getAuth();
     const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const productsRef = ref(db, `products/${user.uid}`);
     
-    console.log('MyProducts - Current user:', user?.uid); // Debug log
-    
-    onValue(productsRef, (snapshot) => {
-      const data = snapshot.val();
-      console.log('MyProducts - All data:', data); // Debug log
-      
-      if (data) {
-        const productsArray = Object.entries(data).map(([id, product]: [string, any]) => ({
-          id,
-          ...product,
-        }));
-        
-        console.log('MyProducts - Before filter:', productsArray); // Debug log
-        
-        const userProducts = productsArray.filter(product => {
-          console.log('Comparing:', {
-            productUserId: product.userId,
-            currentUserId: user?.uid,
-            isMatch: product.userId === user?.uid
-          });
-          return product.userId === user?.uid;
-        });
-        
-        console.log('MyProducts - After filter:', userProducts); // Debug log
-        setMyProducts(userProducts);
-      }
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const productsData = snapshot.val() || {};
+      const productsArray = Object.entries(productsData).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+      }));
+      console.log('Fetched products:', productsArray);
+      setProducts(productsArray);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching products:', error);
+      setLoading(false);
     });
+
+    return () => unsubscribe();
   }, []);
 
-  const addNewProduct = async () => {
-    if (!newProduct.name || !newProduct.description || newProduct.images.length === 0 || 
-        newProduct.priceStart < 0 || newProduct.priceEnd < newProduct.priceStart) {
-      Alert.alert('Error', 'Please fill all fields correctly and add at least one image');
-      return;
-    }
+  const handleImagePick = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
 
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      if (uri) {
+        setPublishing(true);
+        try {
+          setNewProduct((prev) => ({
+            ...prev,
+            images: [...prev.images, uri],
+          }));
+        } catch (error) {
+          console.error('Error handling image:', error);
+          Alert.alert('Error', 'Failed to add image');
+        } finally {
+          setPublishing(false);
+        }
+      }
+    }
+  };
+
+  const handlePublish = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
-    if (!user) {
-      Alert.alert('Error', 'Please login first');
+    if (!user) return;
+
+    if (!newProduct.name.trim()) {
+      Alert.alert('Error', 'Product name is required');
       return;
     }
 
+    if (!newProduct.description.trim()) {
+      Alert.alert('Error', 'Product description is required');
+      return;
+    }
+
+    if (newProduct.priceStart <= 0 || newProduct.priceEnd <= 0) {
+      Alert.alert('Error', 'Product price must be greater than zero');
+      return;
+    }
+
+    if (newProduct.priceStart > newProduct.priceEnd) {
+      Alert.alert('Error', 'Starting price cannot be greater than ending price');
+      return;
+    }
+
+    setPublishing(true);
     try {
       const db = getDatabase();
-      const productsRef = ref(db, 'products');
+      const productsRef = ref(db, `products/${user.uid}`);
       const newProductRef = push(productsRef);
       
-      const productData = {
-        name: newProduct.name,
-        description: newProduct.description,
-        images: newProduct.images,
-        priceStart: newProduct.priceStart,
-        priceEnd: newProduct.priceEnd,
+      await set(newProductRef, {
+        ...newProduct,
+        id: newProductRef.key,
         userId: user.uid,
+        status: 'published', // Make sure status is set
         createdAt: Date.now(),
-      };
+      });
 
-      console.log('Publishing product with data:', productData); // Debug log
-      
-      await set(newProductRef, productData);
+      console.log('Published product:', {
+        ...newProduct,
+        id: newProductRef.key,
+        userId: user.uid,
+      });
 
-      // Reset form
       setNewProduct({
-        id: Date.now().toString(),
         name: '',
         description: '',
         images: [],
         priceStart: 0,
         priceEnd: 0,
-        userId: ''
+        status: 'published',
       });
-
       Alert.alert('Success', 'Product published successfully');
     } catch (error) {
-      console.error('Error publishing product:', error); // Debug error
+      console.error('Error publishing product:', error);
       Alert.alert('Error', 'Failed to publish product');
+    } finally {
+      setPublishing(false);
     }
   };
 
-  const handleEdit = async (product: Product) => {
-    if (!editingProduct) {
-      // Start editing
-      setEditingProduct(product);
-    } else {
-      // Save changes
-      if (isSaving) return;
-      
-      try {
-        setIsSaving(true);
-        const auth = getAuth();
-        const user = auth.currentUser;
-        if (!user) return;
+  const handleDeleteProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
 
-        const db = getDatabase();
-        const productRef = ref(db, `products/${editingProduct.id}`);
-        
-        await set(productRef, {
-          ...editingProduct,
-          updatedAt: Date.now(),
-        });
-
-        setEditingProduct(null);
-        Alert.alert('Success', 'Product updated successfully');
-      } catch (error) {
-        Alert.alert('Error', 'Failed to update product');
-      } finally {
-        setIsSaving(false);
-      }
-    }
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this product?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const db = getDatabase();
+              const productRef = ref(db, `products/${user.uid}/${productId}`);
+              await remove(productRef);
+              Alert.alert('Success', 'Product deleted successfully');
+            } catch (error) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Error', 'Failed to delete product');
+            }
+          },
+        },
+      ]
+    );
   };
 
-  const pickImage = async () => {
-    try {
-      // Request permissions
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to upload images.');
-        return;
-      }
-
-      // Pick the image
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        // Update the product images array with the new image URI
-        setNewProduct(prev => ({
-          ...prev,
-          images: [...prev.images, result.assets[0].uri]
-        }));
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
-    }
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.addProductSection}>
-        <Text style={styles.formSectionTitle}>Add New Product</Text>
-        
+      <Text style={styles.title}>My Products</Text>
+
+      <View style={styles.form}>
         <TextInput
           style={styles.input}
           placeholder="Product Name"
           value={newProduct.name}
-          onChangeText={(text) => setNewProduct(prev => ({ ...prev, name: text }))}
+          onChangeText={(text) => setNewProduct((prev) => ({ ...prev, name: text }))}
         />
-        
         <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Product Description"
+          style={styles.input}
+          placeholder="Description"
           multiline
-          numberOfLines={4}
+          numberOfLines={3}
           value={newProduct.description}
-          onChangeText={(text) => setNewProduct(prev => ({ ...prev, description: text }))}
+          onChangeText={(text) => setNewProduct((prev) => ({ ...prev, description: text }))}
         />
-
-        <View style={styles.priceContainer}>
-          <TextInput
-            style={[styles.input, styles.priceInput]}
-            placeholder="Min Price"
-            value={newProduct.priceStart.toString()}
-            keyboardType="numeric"
-            onChangeText={(text) => setNewProduct(prev => ({ 
-              ...prev, 
-              priceStart: parseFloat(text) || 0 
-            }))}
-          />
-          <TextInput
-            style={[styles.input, styles.priceInput]}
-            placeholder="Max Price"
-            value={newProduct.priceEnd.toString()}
-            keyboardType="numeric"
-            onChangeText={(text) => setNewProduct(prev => ({ 
-              ...prev, 
-              priceEnd: parseFloat(text) || 0 
-            }))}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-          <Text style={styles.imageButtonText}>Add Image</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Price Start"
+          keyboardType="numeric"
+          value={newProduct.priceStart.toString()}
+          onChangeText={(text) => setNewProduct((prev) => ({ ...prev, priceStart: parseFloat(text) || 0 }))}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Price End"
+          keyboardType="numeric"
+          value={newProduct.priceEnd.toString()}
+          onChangeText={(text) => setNewProduct((prev) => ({ ...prev, priceEnd: parseFloat(text) || 0 }))}
+        />
+        <TouchableOpacity style={styles.imagePicker} onPress={handleImagePick}>
+          <Text style={styles.imagePickerText}>Pick an Image</Text>
         </TouchableOpacity>
-
-        {newProduct.images.length > 0 && (
-          <ScrollView horizontal style={styles.imagePreviewContainer}>
-            {newProduct.images.map((image, index) => (
-              <Image
-                key={index}
-                source={{ uri: image }}
-                style={styles.imagePreview}
-              />
-            ))}
-          </ScrollView>
-        )}
-
-        <TouchableOpacity style={styles.addButton} onPress={addNewProduct}>
-          <Text style={styles.addButtonText}>Publish Product</Text>
+        <ScrollView horizontal style={styles.imagePreview}>
+          {newProduct.images.map((uri, index) => (
+            <Image key={index} source={{ uri }} style={styles.image} />
+          ))}
+        </ScrollView>
+        <TouchableOpacity
+          style={[styles.publishButton, publishing && styles.disabledButton]}
+          onPress={handlePublish}
+          disabled={publishing}
+        >
+          {publishing ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.buttonText}>Publish</Text>
+          )}
         </TouchableOpacity>
       </View>
 
-      <View style={styles.productsSection}>
-        <Text style={styles.sectionTitle}>My Published Products</Text>
-        <View style={styles.productGrid}>
-          {myProducts.map((product) => (
-            <View key={product.id} style={styles.productCard}>
-              {product.images && product.images.length > 0 && (
-                <Image
-                  source={{ uri: product.images[0] }}
-                  style={styles.productImage}
-                  resizeMode="cover"
-                />
-              )}
-              <View style={styles.productInfo}>
-                <Text style={styles.productName}>{product.name}</Text>
+      <View style={styles.gridContainer}>
+        {products.length > 0 ? (
+          products.map((product) => (
+            <View
+              key={product.id}
+              style={[
+                styles.card,
+                Platform.select({
+                  web: { width: '23%', margin: '1%' },
+                  default: { width: '46%', marginHorizontal: '2%', marginBottom: 16 }
+                })
+              ]}
+            >
+              <Image
+                source={{ uri: product.images?.[0] || 'https://via.placeholder.com/150' }}
+                style={styles.cardImage}
+                resizeMode="cover"
+              />
+              <View style={styles.cardContent}>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {product.name}
+                </Text>
                 <Text style={styles.productDescription} numberOfLines={2}>
                   {product.description}
                 </Text>
                 <Text style={styles.productPrice}>
-                  ${product.priceStart} - ${product.priceEnd}
+                  ${product.priceStart.toLocaleString()} - ${product.priceEnd.toLocaleString()}
                 </Text>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteProduct(product.id)}
+                >
+                  <Text style={styles.buttonText}>Delete</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          ))}
-        </View>
+          ))
+        ) : (
+          <Text style={styles.noProductsText}>No products available</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -286,173 +296,122 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  addProductSection: {
     padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  form: {
+    marginBottom: 32,
     backgroundColor: 'white',
-    margin: 16,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  formSectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
     padding: 12,
+    borderRadius: 8,
     marginBottom: 16,
-    fontSize: 16,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  imageButton: {
+  imagePicker: {
     backgroundColor: '#007AFF',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 16,
   },
-  imageButtonText: {
+  imagePickerText: {
     color: 'white',
     fontWeight: '600',
   },
-  imagePreviewContainer: {
-    flexDirection: 'row',
+  imagePreview: {
     marginBottom: 16,
   },
-  imagePreview: {
-    width: 100,
-    height: 100,
-    marginRight: 8,
+  image: {
+    width: 60,
+    height: 60,
     borderRadius: 8,
+    marginRight: 8,
   },
-  addButton: {
-    backgroundColor: '#34C759',
+  publishButton: {
+    backgroundColor: '#4CAF50',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  addButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  productsSection: {
-    padding: Platform.OS === 'web' ? 8 : 0,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  productGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    padding: 10,
-  },
-  productCard: {
-    width: '48%',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  productImage: {
-    width: '100%',
-    height: 150,
-  },
-  productInfo: {
-    padding: 10,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  productDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-  },
-  productPrice: {
-    fontSize: 14,
-    color: '#2E7D32',
-    fontWeight: '600',
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  priceInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 12,
-    marginHorizontal: 4,
-  },
-  editInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 14,
-  },
-  editDescription: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  button: {
-    flex: 1,
-    padding: 8,
-    borderRadius: 4,
-    alignItems: 'center',
-    marginRight: 8,
+  disabledButton: {
+    backgroundColor: '#A5D6A7',
   },
   buttonText: {
     color: 'white',
     fontWeight: '600',
   },
-  editButton: {
-    backgroundColor: '#FF9500',
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
-  priceRange: {
-    fontSize: 12,
-    color: '#2E7D32',
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardImage: {
+    width: '100%',
+    height: Platform.OS === 'web' ? 120 : 160,
+  },
+  cardContent: {
+    padding: Platform.OS === 'web' ? 8 : 12,
+    height: Platform.OS === 'web' ? 140 : 160,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  productDescription: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  productPrice: {
+    fontSize: 16,
     fontWeight: '600',
+    marginTop: 8,
   },
-  disabledButton: {
-    opacity: 0.6,
+  deleteButton: {
+    backgroundColor: '#F44336',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
   },
-  editingCardContent: {
-    height: 'auto',  // Allow content to expand when editing
-    paddingBottom: 16,
-  },
-  editingContainer: {
-    flex: 1,
-    gap: 8,
+  noProductsText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginTop: 32,
   },
 });

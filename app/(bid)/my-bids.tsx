@@ -44,6 +44,8 @@ export default function MyBidsScreen() {
     onValue(productsRef, (snapshot) => {
       const productsData = snapshot.val() || {};
       setProducts(productsData);
+    }, (error) => {
+      console.error('Error fetching products:', error);
     });
 
     // Then load bids
@@ -56,10 +58,13 @@ export default function MyBidsScreen() {
         }));
         setMyBids(bidsArray.sort((a, b) => b.createdAt - a.createdAt));
       } else {
+        console.log('No bids found');
         setMyBids([]);
       }
+    }, (error) => {
+      console.error('Error fetching bids:', error);
     });
-  }, []);
+  }, []); // Empty dependency array to run only once
 
   const handleCancelBid = async (bidId: string) => {
     try {
@@ -93,6 +98,87 @@ export default function MyBidsScreen() {
     );
   };
 
+  const renderBidItem = (bid: Bid) => {
+    const targetProduct = products[bid.targetProductId];
+    if (!targetProduct) {
+      console.log(`Target product not found for bid ${bid.id}`);
+      return null;
+    }
+  
+    const offeredProducts = bid.offeredProducts.map(id => products[id]).filter(Boolean);
+  
+    return (
+      <View key={bid.id} style={styles.bidCard}>
+        <TouchableOpacity 
+          style={styles.cardContent}
+          onPress={() => router.push({
+            pathname: "/(bid)/bid-details",
+            params: { id: bid.targetProductId }
+          })}
+        >
+          {targetProduct.images && targetProduct.images.length > 0 ? (
+            <Image
+              source={{ uri: targetProduct.images[0] }}
+              style={styles.mainImage}
+            />
+          ) : (
+            <View style={styles.mainImagePlaceholder}>
+              <Text>No Image</Text>
+            </View>
+          )}
+          
+          <View style={styles.cardBody}>
+            <Text style={styles.productName} numberOfLines={1}>
+              {targetProduct.name}
+            </Text>
+            
+            <Text style={styles.priceText}>
+              ${targetProduct.priceStart} - ${targetProduct.priceEnd}
+            </Text>
+  
+            <View style={styles.offeredProductsRow}>
+              <Text style={styles.offeredLabel}>Offered:</Text>
+              <View style={styles.offeredThumbnails}>
+                {offeredProducts.slice(0, 3).map(product => (
+                  product.images && product.images.length > 0 ? (
+                    <Image
+                      key={product.id}
+                      source={{ uri: product.images[0] }}
+                      style={styles.thumbnailImage}
+                    />
+                  ) : (
+                    <View key={product.id} style={styles.thumbnailImagePlaceholder}>
+                      <Text>No Image</Text>
+                    </View>
+                  )
+                ))}
+                {offeredProducts.length > 3 && (
+                  <View style={styles.moreIndicator}>
+                    <Text style={styles.moreIndicatorText}>
+                      +{offeredProducts.length - 3}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+  
+            <View style={styles.cardFooter}>
+              {renderBidStatus(bid.status)}
+              {bid.status === 'pending' && (
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => handleCancelBid(bid.id)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>My Bids</Text>
@@ -109,73 +195,7 @@ export default function MyBidsScreen() {
         </View>
       ) : (
         <View style={styles.cardsContainer}>
-          {myBids.map(bid => {
-            const targetProduct = products[bid.targetProductId];
-            if (!targetProduct) return null;
-
-            return (
-              <View key={bid.id} style={styles.bidCard}>
-                <TouchableOpacity 
-                  style={styles.cardContent}
-                  onPress={() => router.push({
-                    pathname: "/(bid)/bid-details",
-                    params: { id: bid.targetProductId }
-                  })}
-                >
-                  <Image
-                    source={{ uri: targetProduct.images[0] }}
-                    style={styles.mainImage}
-                  />
-                  
-                  <View style={styles.cardBody}>
-                    <Text style={styles.productName} numberOfLines={1}>
-                      {targetProduct.name}
-                    </Text>
-                    
-                    <Text style={styles.priceText}>
-                      ${targetProduct.priceStart} - ${targetProduct.priceEnd}
-                    </Text>
-
-                    <View style={styles.offeredProductsRow}>
-                      <Text style={styles.offeredLabel}>Offered:</Text>
-                      <View style={styles.offeredThumbnails}>
-                        {bid.offeredProducts.slice(0, 3).map(productId => {
-                          const product = products[productId];
-                          if (!product) return null;
-                          return (
-                            <Image
-                              key={productId}
-                              source={{ uri: product.images[0] }}
-                              style={styles.thumbnailImage}
-                            />
-                          );
-                        })}
-                        {bid.offeredProducts.length > 3 && (
-                          <View style={styles.moreIndicator}>
-                            <Text style={styles.moreIndicatorText}>
-                              +{bid.offeredProducts.length - 3}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.cardFooter}>
-                      {renderBidStatus(bid.status)}
-                      {bid.status === 'pending' && (
-                        <TouchableOpacity
-                          style={styles.cancelButton}
-                          onPress={() => handleCancelBid(bid.id)}
-                        >
-                          <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
+          {myBids.map(bid => renderBidItem(bid))}
         </View>
       )}
     </ScrollView>
@@ -217,6 +237,14 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 8,
   },
+  mainImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   cardBody: {
     flex: 1,
     marginLeft: 12,
@@ -249,6 +277,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 4,
+    marginRight: 4,
+  },
+  thumbnailImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 4,
   },
   moreIndicator: {
