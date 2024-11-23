@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   FlatList,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { getDatabase, ref, onValue, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
@@ -40,7 +41,7 @@ interface Bid {
 
 const screenWidth = Dimensions.get('window').width;
 const isMobile = screenWidth < 768;
-const cardWidth = isMobile ? screenWidth / 2 - 20 : screenWidth / 7 - 20;
+const cardWidth = isMobile ? screenWidth / 2 - 20 : screenWidth / 3 - 20;
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -187,40 +188,49 @@ export default function ProductsScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.container}>
-        {products.map((product) => (
-          <View key={product.id} style={[styles.card, { width: cardWidth }]}>
-            <FlatList
-              horizontal
-              data={product.images}
-              renderItem={({ item }) => (
-                <Image source={{ uri: item }} style={styles.productImage} />
-              )}
-              keyExtractor={(item, index) => index.toString()}
-              showsHorizontalScrollIndicator={false}
-            />
-            <View style={styles.productInfo}>
-              <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productDescription}>{product.description}</Text>
-              <Text style={styles.productPrice}>
-                ${product.priceStart} - ${product.priceEnd}
-              </Text>
+        <View style={styles.cardsWrapper}>
+          {products.map((product) => (
+            <View key={product.id} style={[styles.card, { width: cardWidth }]}>
+              <FlatList
+                horizontal
+                data={product.images}
+                renderItem={({ item }) => (
+                  <Image
+                    source={
+                      Platform.OS === 'web'
+                        ? { uri: item }
+                        : { uri: item }
+                    }
+                    style={styles.productImage}
+                  />
+                )}
+                keyExtractor={(item, index) => index.toString()}
+                showsHorizontalScrollIndicator={false}
+              />
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{product.name}</Text>
+                <Text style={styles.productDescription}>{product.description}</Text>
+                <Text style={styles.productPrice}>
+                  ${product.priceStart} - ${product.priceEnd}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.bidButton}
+                onPress={() => {
+                  setTargetProductId(product.id);
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.bidButtonText}>Place a Bid</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.bidButton}
-              onPress={() => {
-                setTargetProductId(product.id);
-                setModalVisible(true);
-              }}
-            >
-              <Text style={styles.bidButtonText}>Place a Bid</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          ))}
+        </View>
       </ScrollView>
       <Modal isVisible={isModalVisible}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Products to Offer</Text>
-          <ScrollView>
+          <ScrollView style={styles.modalScrollView}>
             {userProducts.map((product) => (
               <TouchableOpacity
                 key={product.id}
@@ -239,7 +249,9 @@ export default function ProductsScreen() {
                 }}
               >
                 <Image
-                  source={{ uri: product.images[0] }}
+                  source={
+                    { uri: product.images[0] }
+                  }
                   style={styles.productImage}
                 />
                 <View style={styles.productInfo}>
@@ -278,9 +290,12 @@ export default function ProductsScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    alignItems: 'center',
+  },
+  cardsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: '#fff',
@@ -348,6 +363,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 10,
+  },
+  modalScrollView: {
+    maxHeight: 300, // Limit the height of the scroll view
   },
   modalButtons: {
     flexDirection: 'row',

@@ -24,12 +24,14 @@ interface Product {
   priceEnd: number;
   userId: string;
   status: 'draft' | 'published';
+  createdAt: number;
 }
 
 export default function MyProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
@@ -38,6 +40,7 @@ export default function MyProductsScreen() {
     priceEnd: 0,
     status: 'published' as 'draft' | 'published',
   });
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     const auth = getAuth();
@@ -153,6 +156,94 @@ export default function MyProductsScreen() {
     }
   };
 
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setNewProduct({
+      name: product.name,
+      description: product.description,
+      images: product.images,
+      priceStart: product.priceStart,
+      priceEnd: product.priceEnd,
+      status: product.status,
+    });
+    setIsEditing(true);
+  };
+
+  const handleUpdateProduct = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !editingProduct) return;
+
+    if (!newProduct.name.trim()) {
+      Alert.alert('Error', 'Product name is required');
+      return;
+    }
+
+    if (!newProduct.description.trim()) {
+      Alert.alert('Error', 'Product description is required');
+      return;
+    }
+
+    if (newProduct.priceStart <= 0 || newProduct.priceEnd <= 0) {
+      Alert.alert('Error', 'Product price must be greater than zero');
+      return;
+    }
+
+    if (newProduct.priceStart > newProduct.priceEnd) {
+      Alert.alert('Error', 'Starting price cannot be greater than ending price');
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const db = getDatabase();
+      const productRef = ref(db, `products/${user.uid}/${editingProduct.id}`);
+      
+      await set(productRef, {
+        ...newProduct,
+        id: editingProduct.id,
+        userId: user.uid,
+        createdAt: editingProduct.createdAt,
+      });
+
+      console.log('Updated product:', {
+        ...newProduct,
+        id: editingProduct.id,
+        userId: user.uid,
+      });
+
+      setNewProduct({
+        name: '',
+        description: '',
+        images: [],
+        priceStart: 0,
+        priceEnd: 0,
+        status: 'published',
+      });
+      setEditingProduct(null);
+      setIsEditing(false);
+      Alert.alert('Success', 'Product updated successfully');
+    } catch (error) {
+      console.error('Error updating product:', error);
+      Alert.alert('Error', 'Failed to update product');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProduct(null);
+    setNewProduct({
+      name: '',
+      description: '',
+      images: [],
+      priceStart: 0,
+      priceEnd: 0,
+      status: 'published',
+    });
+    setIsEditing(false);
+  };
+
   const handleDeleteProduct = async (productId: string) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -236,54 +327,71 @@ export default function MyProductsScreen() {
         </ScrollView>
         <TouchableOpacity
           style={[styles.publishButton, publishing && styles.disabledButton]}
-          onPress={handlePublish}
+          onPress={editingProduct ? handleUpdateProduct : handlePublish}
           disabled={publishing}
         >
           {publishing ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text style={styles.buttonText}>Publish</Text>
+            <Text style={styles.buttonText}>{editingProduct ? 'Update' : 'Publish'}</Text>
           )}
         </TouchableOpacity>
+        {isEditing && (
+          <TouchableOpacity
+            style={[styles.cancelButton, publishing && styles.disabledButton]}
+            onPress={handleCancelEdit}
+            disabled={publishing}
+          >
+            <Text style={styles.buttonText}>Cancel</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.gridContainer}>
         {products.length > 0 ? (
-          products.map((product) => (
-            <View
-              key={product.id}
-              style={[
-                styles.card,
-                Platform.select({
-                  web: { width: '23%', margin: '1%' },
-                  default: { width: '46%', marginHorizontal: '2%', marginBottom: 16 }
-                })
-              ]}
-            >
-              <Image
-                source={{ uri: product.images?.[0] || 'https://via.placeholder.com/150' }}
-                style={styles.cardImage}
-                resizeMode="cover"
-              />
-              <View style={styles.cardContent}>
-                <Text style={styles.productName} numberOfLines={1}>
-                  {product.name}
-                </Text>
-                <Text style={styles.productDescription} numberOfLines={2}>
-                  {product.description}
-                </Text>
-                <Text style={styles.productPrice}>
-                  ${product.priceStart.toLocaleString()} - ${product.priceEnd.toLocaleString()}
-                </Text>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteProduct(product.id)}
-                >
-                  <Text style={styles.buttonText}>Delete</Text>
-                </TouchableOpacity>
+          <View style={styles.cardsWrapper}>
+            {products.map((product) => (
+              <View
+                key={product.id}
+                style={[
+                  styles.card,
+                  Platform.select({
+                    web: { width: '13%', margin: '1%' },
+                    default: { width: '46%', marginHorizontal: '2%', marginBottom: 16 }
+                  })
+                ]}
+              >
+                <Image
+                  source={{ uri: product.images?.[0] || 'https://via.placeholder.com/150' }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.cardContent}>
+                  <Text style={styles.productName} numberOfLines={1}>
+                    {product.name}
+                  </Text>
+                  <Text style={styles.productDescription} numberOfLines={2}>
+                    {product.description}
+                  </Text>
+                  <Text style={styles.productPrice}>
+                    ${product.priceStart.toLocaleString()} - ${product.priceEnd.toLocaleString()}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleEditProduct(product)}
+                  >
+                    <Text style={styles.buttonText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteProduct(product.id)}
+                  >
+                    <Text style={styles.buttonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+          </View>
         ) : (
           <Text style={styles.noProductsText}>No products available</Text>
         )}
@@ -358,10 +466,20 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  cancelButton: {
+    backgroundColor: '#FF6347',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
   gridContainer: {
+    alignItems: 'center',
+  },
+  cardsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: 'white',
@@ -379,7 +497,7 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: Platform.OS === 'web' ? 8 : 12,
-    height: Platform.OS === 'web' ? 140 : 160,
+    height: Platform.OS === 'web' ? 140 : 180, // Increase height to fit buttons
   },
   productName: {
     fontSize: 18,
@@ -401,9 +519,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
+  editButton: {
+    backgroundColor: '#FFA500',
+    padding: 8, // Reduce padding
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
   deleteButton: {
     backgroundColor: '#F44336',
-    padding: 12,
+    padding: 8, // Reduce padding
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,

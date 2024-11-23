@@ -7,6 +7,7 @@ import {
   Image,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, onValue, remove } from 'firebase/database';
@@ -123,65 +124,77 @@ export default function MyBidsScreen() {
             params: { bidId: bid.id, userId: bid.userId }
           })}
         >
-          {targetProduct.images && targetProduct.images.length > 0 ? (
-            <Image
-              source={{ uri: targetProduct.images[0] }}
-              style={styles.mainImage}
-            />
-          ) : (
-            <View style={styles.mainImagePlaceholder}>
-              <Text>No Image</Text>
-            </View>
-          )}
-          
-          <View style={styles.cardBody}>
-            <Text style={styles.productName} numberOfLines={1}>
-              {targetProduct.name}
-            </Text>
-            
-            <Text style={styles.priceText}>
-              ${targetProduct.priceStart} - ${targetProduct.priceEnd}
-            </Text>
-  
-            <View style={styles.offeredProductsRow}>
-              <Text style={styles.offeredLabel}>Offered:</Text>
-              <View style={styles.offeredThumbnails}>
-                {offeredProducts.slice(0, 3).map(product => (
-                  product.images && product.images.length > 0 ? (
-                    <Image
-                      key={product.id}
-                      source={{ uri: product.images[0] }}
-                      style={styles.thumbnailImage}
-                    />
-                  ) : (
-                    <View key={product.id} style={styles.thumbnailImagePlaceholder}>
-                      <Text>No Image</Text>
-                    </View>
-                  )
-                ))}
-                {offeredProducts.length > 3 && (
-                  <View style={styles.moreIndicator}>
-                    <Text style={styles.moreIndicatorText}>
-                      +{offeredProducts.length - 3}
-                    </Text>
-                  </View>
-                )}
+          <View style={styles.productRow}>
+            <View style={styles.cardSection}>
+              <Text style={styles.sectionTitle}>Target Product</Text>
+              {targetProduct.images && targetProduct.images.length > 0 ? (
+                <Image
+                  source={{ uri: targetProduct.images[0] }}
+                  style={styles.mainImage}
+                />
+              ) : (
+                <View style={styles.mainImagePlaceholder}>
+                  <Text>No Image</Text>
+                </View>
+              )}
+              <View style={styles.cardBody}>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {targetProduct.name}
+                </Text>
+                <Text style={styles.priceText}>
+                  ${targetProduct.priceStart} - ${targetProduct.priceEnd}
+                </Text>
               </View>
             </View>
-  
-            <View style={styles.cardFooter}>
-              {renderBidStatus(bid.status)}
-              {bid.status === 'pending' && (
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => handleCancelBid(bid.id)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              )}
+
+            <View style={styles.divider} />
+
+            <View style={styles.cardSection}>
+              <Text style={styles.sectionTitle}>Offered Products</Text>
+              <ScrollView horizontal style={styles.offeredProductsRow}>
+                <View style={styles.offeredThumbnails}>
+                  {offeredProducts.map(product => (
+                    <View key={product.id} style={styles.offeredProduct}>
+                      {product.images && product.images.length > 0 ? (
+                        <Image
+                          source={{ uri: product.images[0] }}
+                          style={styles.thumbnailImage}
+                        />
+                      ) : (
+                        <View style={styles.thumbnailImagePlaceholder}>
+                          <Text>No Image</Text>
+                        </View>
+                      )}
+                      <View style={styles.cardBody}>
+                        <Text style={styles.productName} numberOfLines={1}>
+                          {product.name}
+                        </Text>
+                        <Text style={styles.priceText}>
+                          ${product.priceStart} - ${product.priceEnd}
+                        </Text>
+                        <Text style={styles.productDescription} numberOfLines={2}>
+                          {product.description}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           </View>
         </TouchableOpacity>
+
+        <View style={styles.cardFooter}>
+          {renderBidStatus(bid.status)}
+          {bid.status === 'pending' && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => handleCancelBid(bid.id)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -201,7 +214,7 @@ export default function MyBidsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={styles.cardsContainer}>
+        <View style={styles.cardsWrapper}>
           {myBids.map(bid => renderBidItem(bid))}
         </View>
       )}
@@ -221,23 +234,47 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  cardsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
   cardsContainer: {
     padding: 8,
   },
   bidCard: {
     backgroundColor: 'white',
     borderRadius: 12,
-    marginBottom: 16,
+    margin: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     overflow: 'hidden',
+    width: '100%',
   },
   cardContent: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     padding: 12,
+  },
+  productRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardSection: {
+    flex: 1,
+    marginBottom: 16,
+  },
+  divider: {
+    width: 1,
+    backgroundColor: '#ccc',
+    marginHorizontal: 10,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   mainImage: {
     width: 120,
@@ -253,9 +290,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardBody: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'space-between',
+    marginTop: 8,
   },
   productName: {
     fontSize: 16,
@@ -268,17 +303,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 8,
   },
+  productDescription: {
+    fontSize: 14,
+    color: '#888',
+  },
   offeredProductsRow: {
     marginBottom: 8,
-  },
-  offeredLabel: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 4,
   },
   offeredThumbnails: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  offeredProduct: {
+    marginRight: 10,
   },
   thumbnailImage: {
     width: 40,

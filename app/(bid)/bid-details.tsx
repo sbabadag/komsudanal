@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, onValue, get } from 'firebase/database';
@@ -162,21 +162,23 @@ export default function BidDetailsScreen() {
         {/* Your Offer */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Offer</Text>
-          {offeredProducts.map(product => (
-            <View key={product.id} style={styles.productCard}>
-              <Image 
-                source={{ uri: product.images[0] }} 
-                style={styles.productImage}
-              />
-              <View style={styles.productInfo}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productDescription}>{product.description}</Text>
-                <Text style={styles.productPrice}>
-                  ${product.priceStart} - ${product.priceEnd}
-                </Text>
+          <View style={styles.cardsWrapper}>
+            {offeredProducts.map(product => (
+              <View key={product.id} style={styles.productCard}>
+                <Image 
+                  source={{ uri: product.images[0] }} 
+                  style={styles.productImage}
+                />
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <Text style={styles.productDescription}>{product.description}</Text>
+                  <Text style={styles.productPrice}>
+                    ${product.priceStart} - ${product.priceEnd}
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
 
         {/* Owner Info and Chat */}
@@ -268,6 +270,8 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: 'white',
     borderRadius: 8,
+    margin: 10,
+    width: Platform.OS === 'web' ? '13%' : '46%',
   },
   productImage: {
     width: 80,
@@ -366,5 +370,10 @@ const styles = StyleSheet.create({
   },
   statusunknown: {
     backgroundColor: '#E2E3E5',
+  },
+  cardsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
 });

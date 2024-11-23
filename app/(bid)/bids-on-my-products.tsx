@@ -9,9 +9,11 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  Platform,
 } from 'react-native';
 import { getDatabase, ref, onValue, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
+import { useNavigation } from '@react-navigation/native';
 
 interface Bid {
   id: string;
@@ -40,6 +42,7 @@ export default function BidsOnMyProductsScreen() {
   const [bids, setBids] = useState<Bid[]>([]);
   const [products, setProducts] = useState<{ [key: string]: Product }>({});
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation();
 
   useEffect(() => {
     const db = getDatabase();
@@ -86,6 +89,17 @@ export default function BidsOnMyProductsScreen() {
     };
   }, []); // Empty dependency array to run only once
 
+  useEffect(() => {
+    const updateTabBadge = (count: number) => {
+      navigation.setOptions({
+        tabBarBadge: count > 0 ? count : null,
+      });
+    };
+
+    const unansweredBidsCount = bids.filter(bid => bid.status === 'pending').length;
+    updateTabBadge(unansweredBidsCount);
+  }, [bids, navigation]);
+
   const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
     const db = getDatabase();
     const bidRef = ref(db, `bids/${bidId}`);
@@ -123,64 +137,66 @@ export default function BidsOnMyProductsScreen() {
           <Text style={styles.emptyText}>No bids on your products yet</Text>
         </View>
       ) : (
-        bids.map((bid) => {
-          const product = products[bid.targetProductId];
-          const offeredProducts = bid.offeredProducts.map(id => products[id]).filter(Boolean);
-          return (
-            <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
-              {product && (
-                <View style={styles.productSection}>
-                  <Text style={styles.sectionTitle}>Product You Want</Text>
-                  <View style={styles.productCard}>
-                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
-                    <View style={styles.productInfo}>
-                      <Text style={styles.productName}>{product.name}</Text>
-                      <Text style={styles.productDescription}>{product.description}</Text>
-                      <Text style={styles.productPrice}>
-                        ${product.priceStart} - ${product.priceEnd}
-                      </Text>
+        <View style={styles.cardsWrapper}>
+          {bids.map((bid) => {
+            const product = products[bid.targetProductId];
+            const offeredProducts = bid.offeredProducts.map(id => products[id]).filter(Boolean);
+            return (
+              <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
+                {product && (
+                  <View style={styles.productSection}>
+                    <Text style={styles.sectionTitle}>Product You Want</Text>
+                    <View style={styles.productCard}>
+                      <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                      <View style={styles.productInfo}>
+                        <Text style={styles.productName}>{product.name}</Text>
+                        <Text style={styles.productDescription}>{product.description}</Text>
+                        <Text style={styles.productPrice}>
+                          ${product.priceStart} - ${product.priceEnd}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                </View>
-              )}
-              <View style={styles.offeredSection}>
-                <Text style={styles.sectionTitle}>Offered Products</Text>
-                {offeredProducts.map(offeredProduct => (
-                  <View key={offeredProduct.id} style={styles.productCard}>
-                    <Image source={{ uri: offeredProduct.images[0] }} style={styles.productImage} />
-                    <View style={styles.productInfo}>
-                      <Text style={styles.productName}>{offeredProduct.name}</Text>
-                      <Text style={styles.productDescription}>{offeredProduct.description}</Text>
-                      <Text style={styles.productPrice}>
-                        ${offeredProduct.priceStart} - ${offeredProduct.priceEnd}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.bidInfo}>
-                <Text style={styles.bidStatus}>Status: {bid.status}</Text>
-                <Text style={styles.bidDate}>Date: {new Date(bid.createdAt).toLocaleDateString()}</Text>
-                {bid.status === 'pending' && (
-                  <View style={styles.buttonContainer}>
-                    <TouchableOpacity
-                      style={[styles.button, styles.acceptButton]}
-                      onPress={() => handleBidResponse(bid.id, 'accepted')}
-                    >
-                      <Text style={styles.buttonText}>Accept</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.button, styles.rejectButton]}
-                      onPress={() => handleBidResponse(bid.id, 'rejected')}
-                    >
-                      <Text style={styles.buttonText}>Reject</Text>
-                    </TouchableOpacity>
                   </View>
                 )}
+                <View style={styles.offeredSection}>
+                  <Text style={styles.sectionTitle}>Offered Products</Text>
+                  {offeredProducts.map(offeredProduct => (
+                    <View key={offeredProduct.id} style={styles.productCard}>
+                      <Image source={{ uri: offeredProduct.images[0] }} style={styles.productImage} />
+                      <View style={styles.productInfo}>
+                        <Text style={styles.productName}>{offeredProduct.name}</Text>
+                        <Text style={styles.productDescription}>{offeredProduct.description}</Text>
+                        <Text style={styles.productPrice}>
+                          ${offeredProduct.priceStart} - ${offeredProduct.priceEnd}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.bidInfo}>
+                  <Text style={styles.bidStatus}>Status: {bid.status}</Text>
+                  <Text style={styles.bidDate}>Date: {new Date(bid.createdAt).toLocaleDateString()}</Text>
+                  {bid.status === 'pending' && (
+                    <View style={styles.buttonContainer}>
+                      <TouchableOpacity
+                        style={[styles.button, styles.acceptButton]}
+                        onPress={() => handleBidResponse(bid.id, 'accepted')}
+                      >
+                        <Text style={styles.buttonText}>Accept</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.button, styles.rejectButton]}
+                        onPress={() => handleBidResponse(bid.id, 'rejected')}
+                      >
+                        <Text style={styles.buttonText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-          );
-        })
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
@@ -188,19 +204,24 @@ export default function BidsOnMyProductsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  cardsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    marginVertical: 10,
+    margin: 10,
     padding: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
-    width: '100%',
+    width: Platform.OS === 'web' ? '13%' : '46%',
   },
   productSection: {
     marginBottom: 10,
