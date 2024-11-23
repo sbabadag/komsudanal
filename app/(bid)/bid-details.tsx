@@ -40,7 +40,7 @@ export default function BidDetailsScreen() {
         }
 
         const db = getDatabase();
-        const bidRef = ref(db, `userBids/${user.uid}/${params.bidId}`);
+        const bidRef = ref(db, `userBids/${params.userId}/${params.bidId}`);
         
         // Get initial bid data
         const bidSnapshot = await get(bidRef);

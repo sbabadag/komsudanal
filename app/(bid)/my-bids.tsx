@@ -18,6 +18,7 @@ interface Bid {
   offeredProducts: string[];
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: number;
+  userId: string;
 }
 
 export default function MyBidsScreen() {
@@ -37,13 +38,19 @@ export default function MyBidsScreen() {
     const db = getDatabase();
     
     // Load all bids
-    const bidsRef = ref(db, `userBids/${user.uid}`);
+    const bidsRef = ref(db, 'bids');
     const productsRef = ref(db, 'products');
 
     // First load all products for reference
     onValue(productsRef, (snapshot) => {
       const productsData = snapshot.val() || {};
-      setProducts(productsData);
+      const allProducts: {[key: string]: any} = {};
+      Object.keys(productsData).forEach(userId => {
+        Object.keys(productsData[userId]).forEach(productId => {
+          allProducts[productId] = productsData[userId][productId];
+        });
+      });
+      setProducts(allProducts);
     }, (error) => {
       console.error('Error fetching products:', error);
     });
@@ -52,11 +59,11 @@ export default function MyBidsScreen() {
     onValue(bidsRef, (snapshot) => {
       const bidsData = snapshot.val();
       if (bidsData) {
-        const bidsArray = Object.entries(bidsData).map(([key, value]: [string, any]) => ({
+        const userBids = Object.entries(bidsData).filter(([key, value]: [string, any]) => value.userId === user.uid).map(([key, value]: [string, any]) => ({
           id: key,
           ...value,
         }));
-        setMyBids(bidsArray.sort((a, b) => b.createdAt - a.createdAt));
+        setMyBids(userBids.sort((a, b) => b.createdAt - a.createdAt));
       } else {
         console.log('No bids found');
         setMyBids([]);
@@ -73,7 +80,7 @@ export default function MyBidsScreen() {
       if (!user) return;
 
       const db = getDatabase();
-      const bidRef = ref(db, `userBids/${user.uid}/${bidId}`);
+      const bidRef = ref(db, `bids/${bidId}`);
       
       await remove(bidRef);
       Alert.alert('Success', 'Bid cancelled successfully');
@@ -113,7 +120,7 @@ export default function MyBidsScreen() {
           style={styles.cardContent}
           onPress={() => router.push({
             pathname: "/(bid)/bid-details",
-            params: { id: bid.targetProductId }
+            params: { bidId: bid.id, userId: bid.userId }
           })}
         >
           {targetProduct.images && targetProduct.images.length > 0 ? (

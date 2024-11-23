@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { getDatabase, ref, onValue, push, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
@@ -33,7 +35,12 @@ interface Bid {
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: number;
   userId: string;
+  targetProductOwnerId: string; // Add target product owner ID
 }
+
+const screenWidth = Dimensions.get('window').width;
+const isMobile = screenWidth < 768;
+const cardWidth = isMobile ? screenWidth / 2 - 20 : screenWidth / 7 - 20;
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -124,8 +131,26 @@ export default function ProductsScreen() {
   const handleBidSubmit = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
+    console.log('Selected products:', selectedProducts);
+    console.log('Target product ID:', targetProductId);
     if (!user || !targetProductId || selectedProducts.length === 0) {
       Alert.alert('Error', 'Please select a product to bid on and offer at least one product.');
+      return;
+    }
+
+    const targetProduct = products.find(product => product.id === targetProductId);
+    if (!targetProduct) {
+      console.error('Target product not found for bid', targetProductId);
+      Alert.alert('Error', 'Target product not found.');
+      return;
+    }
+
+    const offeredProductsExist = selectedProducts.every(productId =>
+      userProducts.some(product => product.id === productId)
+    );
+    if (!offeredProductsExist) {
+      console.error('One or more offered products not found', selectedProducts);
+      Alert.alert('Error', 'One or more offered products not found.');
       return;
     }
 
@@ -140,6 +165,7 @@ export default function ProductsScreen() {
       status: 'pending',
       createdAt: Date.now(),
       userId: user.uid,
+      targetProductOwnerId: targetProduct.userId, // Add target product owner ID
     };
 
     try {
@@ -160,58 +186,57 @@ export default function ProductsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView>
+      <ScrollView contentContainerStyle={styles.container}>
         {products.map((product) => (
-          <TouchableOpacity
-            key={product.id}
-            style={[
-              styles.selectableProduct,
-              selectedProducts.includes(product.id) && styles.selectedProduct
-            ]}
-            onPress={() => {
-              setSelectedProducts(prev => 
-                prev.includes(product.id)
-                  ? prev.filter(id => id !== product.id)
-                  : [...prev, product.id]
-              );
-            }}
-          >
-            <Image
-              source={{ uri: product.images[0] }}
-              style={styles.productImage}
+          <View key={product.id} style={[styles.card, { width: cardWidth }]}>
+            <FlatList
+              horizontal
+              data={product.images}
+              renderItem={({ item }) => (
+                <Image source={{ uri: item }} style={styles.productImage} />
+              )}
+              keyExtractor={(item, index) => index.toString()}
+              showsHorizontalScrollIndicator={false}
             />
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productDescription}>{product.description}</Text>
               <Text style={styles.productPrice}>
                 ${product.priceStart} - ${product.priceEnd}
               </Text>
             </View>
-            <View style={styles.checkbox}>
-              {selectedProducts.includes(product.id) && (
-                <Ionicons name="checkmark" size={24} color="#007AFF" />
-              )}
-            </View>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bidButton}
+              onPress={() => {
+                setTargetProductId(product.id);
+                setModalVisible(true);
+              }}
+            >
+              <Text style={styles.bidButtonText}>Place a Bid</Text>
+            </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
-      <TouchableOpacity
-        style={styles.bidButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Text style={styles.bidButtonText}>Place a Bid</Text>
-      </TouchableOpacity>
       <Modal isVisible={isModalVisible}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select a Product to Bid On</Text>
+          <Text style={styles.modalTitle}>Select Products to Offer</Text>
           <ScrollView>
             {userProducts.map((product) => (
               <TouchableOpacity
                 key={product.id}
                 style={[
                   styles.selectableProduct,
-                  targetProductId === product.id && styles.selectedProduct
+                  selectedProducts.includes(product.id) && styles.selectedProduct
                 ]}
-                onPress={() => setTargetProductId(product.id)}
+                onPress={() => {
+                  setSelectedProducts(prev => {
+                    const updatedSelectedProducts = prev.includes(product.id)
+                      ? prev.filter(id => id !== product.id)
+                      : [...prev, product.id];
+                    console.log('Updated selected products:', updatedSelectedProducts);
+                    return updatedSelectedProducts;
+                  });
+                }}
               >
                 <Image
                   source={{ uri: product.images[0] }}
@@ -224,7 +249,7 @@ export default function ProductsScreen() {
                   </Text>
                 </View>
                 <View style={styles.checkbox}>
-                  {targetProductId === product.id && (
+                  {selectedProducts.includes(product.id) && (
                     <Ionicons name="checkmark" size={24} color="#007AFF" />
                   )}
                 </View>
@@ -252,6 +277,22 @@ export default function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    margin: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
   selectableProduct: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -264,8 +305,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
   },
   productImage: {
-    width: 50,
-    height: 50,
+    width: 100,
+    height: 100,
     marginRight: 10,
   },
   productInfo: {
@@ -275,6 +316,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  productDescription: {
+    fontSize: 14,
+    color: '#888',
+  },
   productPrice: {
     fontSize: 14,
     color: '#888',
@@ -283,14 +328,16 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   bidButton: {
-    padding: 15,
+    padding: 10,
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 5,
+    marginTop: 10,
   },
   bidButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
   },
   modalContent: {
     backgroundColor: 'white',

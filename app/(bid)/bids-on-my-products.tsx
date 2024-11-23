@@ -5,8 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Image,
+  TouchableOpacity,
+  Dimensions,
+  Alert,
 } from 'react-native';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 
 interface Bid {
@@ -16,6 +20,7 @@ interface Bid {
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: number;
   userId: string;
+  notification?: string;
 }
 
 interface Product {
@@ -28,97 +33,254 @@ interface Product {
   userId: string;
 }
 
+const screenWidth = Dimensions.get('window').width;
+const cardWidth = screenWidth - 40; // Adjust card width to fit the screen with some padding
+
 export default function BidsOnMyProductsScreen() {
   const [bids, setBids] = useState<Bid[]>([]);
+  const [products, setProducts] = useState<{ [key: string]: Product }>({});
   const [loading, setLoading] = useState(true);
-  const [userProducts, setUserProducts] = useState<Product[]>([]);
-  const auth = getAuth();
-  const user = auth.currentUser;
 
   useEffect(() => {
+    const db = getDatabase();
+    const auth = getAuth();
+    const user = auth.currentUser;
+
     if (!user) return;
 
-    const db = getDatabase();
-    const userProductsRef = ref(db, `products/${user.uid}`);
-
-    // Fetch user's products
-    const unsubscribeUserProducts = onValue(userProductsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const productsArray = Object.keys(data).map((productId) => ({
-          ...data[productId],
-          id: productId,
-          userId: user.uid,
-        }));
-        setUserProducts(productsArray);
-        console.log('User products:', productsArray); // Debug log
-      }
-    });
-
-    return () => {
-      unsubscribeUserProducts();
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user || userProducts.length === 0) return;
-
-    const db = getDatabase();
     const bidsRef = ref(db, 'bids');
+    const productsRef = ref(db, 'products');
 
-    // Fetch bids
     const unsubscribeBids = onValue(bidsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const allBids: Bid[] = Object.keys(data).map((bidId) => ({
-          ...data[bidId],
-          id: bidId,
-        }));
-
-        // Filter bids to show only those relevant to the user's products
-        const filteredBids = allBids.filter((bid) =>
-          userProducts.some((product) => product.id === bid.targetProductId)
-        );
-
-        setBids(filteredBids);
-        console.log('Filtered bids:', filteredBids); // Debug log
+        const userBids = Object.values(data).filter((bid) => {
+          const bidData = bid as Bid;
+          return bidData.targetProductOwnerId === user.uid;
+        }) as Bid[];
+        setBids(userBids);
       }
       setLoading(false);
     });
 
+    const unsubscribeProducts = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const allProducts: { [key: string]: Product } = {};
+        Object.keys(data).forEach(userId => {
+          Object.keys(data[userId]).forEach(productId => {
+            allProducts[productId] = {
+              ...data[userId][productId],
+              id: productId,
+              userId: userId,
+            };
+          });
+        });
+        setProducts(allProducts);
+      }
+    });
+
     return () => {
       unsubscribeBids();
+      unsubscribeProducts();
     };
-  }, [user, userProducts]);
+  }, []); // Empty dependency array to run only once
+
+  const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
+    const db = getDatabase();
+    const bidRef = ref(db, `bids/${bidId}`);
+    const bid = bids.find(b => b.id === bidId);
+    if (!bid) {
+      console.error('Bid not found', bidId);
+      Alert.alert('Error', 'Bid not found.');
+      return;
+    }
+
+    const targetProduct = products[bid.targetProductId];
+    if (!targetProduct) {
+      console.error('Target product not found for bid', bid.targetProductId);
+      Alert.alert('Error', 'Target product not found.');
+      return;
+    }
+
+    try {
+      await update(bidRef, { status, notification: `Your bid has been ${status}.` });
+      Alert.alert('Success', `Bid has been ${status}.`);
+    } catch (error) {
+      console.error(`Error updating bid status to ${status}:`, error);
+      Alert.alert('Error', `There was an error updating the bid status. Please try again.`);
+    }
+  };
 
   if (loading) {
     return <ActivityIndicator size="large" color="#0000ff" />;
   }
 
   return (
-    <ScrollView>
-      {bids.map((bid) => (
-        <View key={bid.id} style={styles.bidContainer}>
-          <Text style={styles.bidText}>Bid ID: {bid.id}</Text>
-          <Text style={styles.bidText}>Target Product ID: {bid.targetProductId}</Text>
-          <Text style={styles.bidText}>Status: {bid.status}</Text>
-          <Text style={styles.bidText}>Created At: {new Date(bid.createdAt).toLocaleString()}</Text>
-          <Text style={styles.bidText}>Offered Products: {bid.offeredProducts.join(', ')}</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      {bids.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No bids on your products yet</Text>
         </View>
-      ))}
+      ) : (
+        bids.map((bid) => {
+          const product = products[bid.targetProductId];
+          const offeredProducts = bid.offeredProducts.map(id => products[id]).filter(Boolean);
+          return (
+            <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
+              {product && (
+                <View style={styles.productSection}>
+                  <Text style={styles.sectionTitle}>Product You Want</Text>
+                  <View style={styles.productCard}>
+                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{product.name}</Text>
+                      <Text style={styles.productDescription}>{product.description}</Text>
+                      <Text style={styles.productPrice}>
+                        ${product.priceStart} - ${product.priceEnd}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+              <View style={styles.offeredSection}>
+                <Text style={styles.sectionTitle}>Offered Products</Text>
+                {offeredProducts.map(offeredProduct => (
+                  <View key={offeredProduct.id} style={styles.productCard}>
+                    <Image source={{ uri: offeredProduct.images[0] }} style={styles.productImage} />
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{offeredProduct.name}</Text>
+                      <Text style={styles.productDescription}>{offeredProduct.description}</Text>
+                      <Text style={styles.productPrice}>
+                        ${offeredProduct.priceStart} - ${offeredProduct.priceEnd}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.bidInfo}>
+                <Text style={styles.bidStatus}>Status: {bid.status}</Text>
+                <Text style={styles.bidDate}>Date: {new Date(bid.createdAt).toLocaleDateString()}</Text>
+                {bid.status === 'pending' && (
+                  <View style={styles.buttonContainer}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.acceptButton]}
+                      onPress={() => handleBidResponse(bid.id, 'accepted')}
+                    >
+                      <Text style={styles.buttonText}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.rejectButton]}
+                      onPress={() => handleBidResponse(bid.id, 'rejected')}
+                    >
+                      <Text style={styles.buttonText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  bidContainer: {
-    padding: 10,
-    margin: 10,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+  container: {
+    paddingHorizontal: 10,
   },
-  bidText: {
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginVertical: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+    width: '100%',
+  },
+  productSection: {
+    marginBottom: 10,
+  },
+  offeredSection: {
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  productCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  productImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
     fontSize: 16,
-    marginBottom: 5,
+    fontWeight: 'bold',
+  },
+  productDescription: {
+    fontSize: 14,
+    color: '#888',
+  },
+  productPrice: {
+    fontSize: 14,
+    color: '#888',
+  },
+  bidInfo: {
+    marginTop: 10,
+  },
+  bidStatus: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  bidDate: {
+    fontSize: 14,
+    color: '#888',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  button: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 5,
+  },
+  acceptButton: {
+    backgroundColor: '#4CAF50',
+  },
+  rejectButton: {
+    backgroundColor: '#F44336',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
   },
 });
