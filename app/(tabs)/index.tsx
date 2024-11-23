@@ -12,11 +12,13 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { getDatabase, ref, onValue, push, set } from 'firebase/database';
+import { getDatabase, ref, onValue, push, set, update, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 
 // Define the Product type
 interface Product {
@@ -129,6 +131,25 @@ export default function ProductsScreen() {
     return () => unsubscribe();
   }, []); // Empty dependency array to run only once
 
+  const sendPushNotification = async (expoPushToken: string, message: string) => {
+    const messageBody = {
+      to: expoPushToken,
+      sound: 'default',
+      title: 'New Bid Received',
+      body: message,
+      data: { message },
+    };
+
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messageBody),
+    });
+  };
+
   const handleBidSubmit = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -171,6 +192,24 @@ export default function ProductsScreen() {
 
     try {
       await set(newBidRef, newBid);
+      // Send notification to the target product owner
+      const notificationRef = ref(db, `notifications/${targetProduct.userId}`);
+      const newNotificationRef = push(notificationRef);
+      await set(newNotificationRef, {
+        message: `You have received a new bid on your product: ${targetProduct.name}`,
+        createdAt: Date.now(),
+        read: false,
+      });
+
+      // Fetch the target user's Expo push token
+      const userTokenRef = ref(db, `expoPushTokens/${targetProduct.userId}`);
+      const tokenSnapshot = await get(userTokenRef);
+      const expoPushToken = tokenSnapshot.val();
+
+      if (expoPushToken) {
+        await sendPushNotification(expoPushToken, `You have received a new bid on your product: ${targetProduct.name}`);
+      }
+
       Alert.alert('Success', 'Your bid has been submitted.');
       setSelectedProducts([]);
       setTargetProductId(null);

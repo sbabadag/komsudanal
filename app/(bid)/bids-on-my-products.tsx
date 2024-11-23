@@ -96,8 +96,8 @@ export default function BidsOnMyProductsScreen() {
       });
     };
 
-    const unansweredBidsCount = bids.filter(bid => bid.status === 'pending').length;
-    updateTabBadge(unansweredBidsCount);
+    const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
+    updateTabBadge(resultedBidsCount);
   }, [bids, navigation]);
 
   const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
@@ -120,6 +120,11 @@ export default function BidsOnMyProductsScreen() {
     try {
       await update(bidRef, { status, notification: `Your bid has been ${status}.` });
       Alert.alert('Success', `Bid has been ${status}.`);
+      // Update the tab badge number after handling the bid response
+      const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
+      navigation.setOptions({
+        tabBarBadge: resultedBidsCount > 0 ? resultedBidsCount : null,
+      });
     } catch (error) {
       console.error(`Error updating bid status to ${status}:`, error);
       Alert.alert('Error', `There was an error updating the bid status. Please try again.`);
