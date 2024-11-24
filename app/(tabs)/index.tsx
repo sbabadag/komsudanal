@@ -45,7 +45,10 @@ interface Bid {
 
 const screenWidth = Dimensions.get('window').width;
 const isMobile = screenWidth < 768;
-const cardWidth = '48%'; // Ensure two cards fit in one row
+const cardWidth = Platform.select({
+  web: '13%', // 7 cards per row on web
+  default: '48%', // 2 cards per row on other platforms
+});
 const cardHeight = 300; // Adjust height to fit all items
 
 export default function ProductsScreen() {
@@ -231,8 +234,14 @@ export default function ProductsScreen() {
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.cardsWrapper}>
-          {products.map((product) => (
-            <View key={product.id} style={[styles.card, { width: cardWidth, height: cardHeight }]}>
+          {products.map((product, index) => (
+            <View
+              key={product.id}
+              style={[
+                styles.card,
+                { width: cardWidth === '13%' ? '13%' : '48%' }
+              ]}
+            >
               <FlatList
                 horizontal
                 data={product.images}
@@ -443,6 +452,7 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cardsWrapper: {
     flexDirection: 'row',
@@ -459,12 +469,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     width: '48%', // Ensure two cards fit in one row
-    height: cardHeight, // Adjust height to fit all items
     marginBottom: 10,
     alignItems: 'center', // Center elements horizontally
     justifyContent: 'center', // Center elements vertically
-    marginHorizontal: '0%', // Add horizontal gap
-    marginVertical: '0%', // Add vertical gap
+    height: 300, // Set a fixed height based on the maximum height needed
   },
   cardImage: {
     width: '100%',
@@ -474,6 +482,9 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 12,
+    alignItems: 'center', // Center elements horizontally inside the card content
+    justifyContent: 'center', // Center elements vertically
+
   },
   productName: {
     fontSize: 18,
@@ -536,7 +547,6 @@ const styles = StyleSheet.create({
   productImage: {
     width: 100,
     height: 100,
-    marginRight: 10,
     marginTop: 10,
     marginBottom: -1000,
   },

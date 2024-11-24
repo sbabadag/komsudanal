@@ -350,7 +350,7 @@ export default function MyProductsScreen() {
       <View style={styles.gridContainer}>
         {products.length > 0 ? (
           <View style={styles.cardsWrapper}>
-            {products.map((product) => (
+            {products.map((product, index) => (
               <View
                 key={product.id}
                 style={[
@@ -451,7 +451,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 8,
-    marginRight: 8,
   },
   publishButton: {
     backgroundColor: '#4CAF50',
@@ -492,6 +491,10 @@ const styles = StyleSheet.create({
     elevation: 3,
     width: '48%', // Ensure two cards fit in one row
     marginBottom: 16,
+    alignItems: 'center', // Center elements horizontally
+    justifyContent: 'center', // Center elements vertically
+    padding: 16, // Add padding to ensure content fits well
+    height: 400, // Set a taller fixed height to accommodate extra buttons
   },
   cardImage: {
     width: '100%',
@@ -499,20 +502,26 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 12,
+    alignItems: 'center', // Center elements horizontally inside the card content
+    justifyContent: 'center', // Center elements vertically
   },
   productName: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
+    textAlign: 'center', // Center text horizontally
+    width: '100%', // Ensure the text fits within the card width
   },
   productDescription: {
     fontSize: 16,
     marginBottom: 8,
+    textAlign: 'center', // Center text horizontally
   },
   productPrice: {
     fontSize: 16,
     fontWeight: '600',
     marginTop: 8,
+    textAlign: 'center', // Center text horizontally
   },
   editButton: {
     backgroundColor: '#FFA500',
