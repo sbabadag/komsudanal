@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
   cardsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'space-between', // Adjust to space between cards
   },
   card: {
     backgroundColor: 'white',
@@ -490,14 +490,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    width: '48%', // Ensure two cards fit in one row
+    marginBottom: 16,
   },
   cardImage: {
     width: '100%',
-    height: Platform.OS === 'web' ? 120 : 160,
+    height: 160,
   },
   cardContent: {
-    padding: Platform.OS === 'web' ? 8 : 12,
-    height: Platform.OS === 'web' ? 140 : 180, // Increase height to fit buttons
+    padding: 12,
   },
   productName: {
     fontSize: 18,
@@ -508,12 +509,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 8,
   },
-  productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 8,
-  },
   productPrice: {
     fontSize: 16,
     fontWeight: '600',
@@ -521,14 +516,14 @@ const styles = StyleSheet.create({
   },
   editButton: {
     backgroundColor: '#FFA500',
-    padding: 8, // Reduce padding
+    padding: 8,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
   deleteButton: {
     backgroundColor: '#F44336',
-    padding: 8, // Reduce padding
+    padding: 8,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,

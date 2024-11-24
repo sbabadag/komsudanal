@@ -29,6 +29,8 @@ interface Product {
   priceStart: number;
   priceEnd: number;
   userId: string;
+  status: 'draft' | 'published';
+  createdAt: number;
 }
 
 interface Bid {
@@ -43,7 +45,8 @@ interface Bid {
 
 const screenWidth = Dimensions.get('window').width;
 const isMobile = screenWidth < 768;
-const cardWidth = isMobile ? screenWidth / 2 - 20 : screenWidth / 3 - 20;
+const cardWidth = '48%'; // Ensure two cards fit in one row
+const cardHeight = 300; // Adjust height to fit all items
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -52,7 +55,7 @@ export default function ProductsScreen() {
   const [targetProductId, setTargetProductId] = useState<string | null>(null);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
-  const router = useRouter();
+  // const router = useRouter();
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -229,7 +232,7 @@ export default function ProductsScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.cardsWrapper}>
           {products.map((product) => (
-            <View key={product.id} style={[styles.card, { width: cardWidth }]}>
+            <View key={product.id} style={[styles.card, { width: cardWidth, height: cardHeight }]}>
               <FlatList
                 horizontal
                 data={product.images}
@@ -243,7 +246,7 @@ export default function ProductsScreen() {
                     style={styles.productImage}
                   />
                 )}
-                keyExtractor={(item, index) => index.toString()}
+                keyExtractor={(_, index) => index.toString()}
                 showsHorizontalScrollIndicator={false}
               />
               <View style={styles.productInfo}>
@@ -260,65 +263,27 @@ export default function ProductsScreen() {
                   setModalVisible(true);
                 }}
               >
-                <Text style={styles.bidButtonText}>Place a Bid</Text>
+                <Text style={styles.buttonText}>Place a Bid</Text>
               </TouchableOpacity>
             </View>
           ))}
         </View>
       </ScrollView>
       <Modal isVisible={isModalVisible}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Products to Offer</Text>
-          <ScrollView style={styles.modalScrollView}>
-            {userProducts.map((product) => (
-              <TouchableOpacity
-                key={product.id}
-                style={[
-                  styles.selectableProduct,
-                  selectedProducts.includes(product.id) && styles.selectedProduct
-                ]}
-                onPress={() => {
-                  setSelectedProducts(prev => {
-                    const updatedSelectedProducts = prev.includes(product.id)
-                      ? prev.filter(id => id !== product.id)
-                      : [...prev, product.id];
-                    console.log('Updated selected products:', updatedSelectedProducts);
-                    return updatedSelectedProducts;
-                  });
-                }}
-              >
-                <Image
-                  source={
-                    { uri: product.images[0] }
-                  }
-                  style={styles.productImage}
-                />
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productPrice}>
-                    ${product.priceStart} - ${product.priceEnd}
-                  </Text>
-                </View>
-                <View style={styles.checkbox}>
-                  {selectedProducts.includes(product.id) && (
-                    <Ionicons name="checkmark" size={24} color="#007AFF" />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <View style={styles.modalButtons}>
+        <View style={styles.modal}>
+          <MyProductsScreen />
+          <View style={styles.buttons}>
             <TouchableOpacity
-              style={styles.modalButton}
+              style={styles.button}
               onPress={handleBidSubmit}
             >
-              <Text style={styles.modalButtonText}>Submit Bid</Text>
+              <Text style={styles.buttonText}>Submit Bid</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.modalButton}
+              style={styles.cancelButton}
               onPress={() => setModalVisible(false)}
             >
-              <Text style={styles.modalButtonText}>Cancel</Text>
+              <Text style={styles.buttonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -327,33 +292,243 @@ export default function ProductsScreen() {
   );
 }
 
+const MyProductsScreen = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const productsRef = ref(db, `products/${user.uid}`);
+    
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const productsData = snapshot.val() || {};
+      const productsArray = Object.entries(productsData).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+      }));
+      setProducts(productsArray);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching products:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Select Products to Offer</Text>
+      <View style={styles.cardsWrapper}>
+        {products.map((product) => (
+          <TouchableOpacity
+            key={product.id}
+            style={[
+              styles.card,
+              selectedProducts.includes(product.id) && styles.selectedProduct
+            ]}
+            onPress={() => {
+              setSelectedProducts(prev => {
+                const updatedSelectedProducts = prev.includes(product.id)
+                  ? prev.filter(id => id !== product.id)
+                  : [...prev, product.id];
+                return updatedSelectedProducts;
+              });
+            }}
+          >
+            <Image
+              source={{ uri: product.images[0] }}
+              style={styles.cardImage}
+            />
+            <View style={styles.cardContent}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productDescription}>{product.description}</Text>
+              <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
+              <Text style={styles.productStatus}>Status: {product.status}</Text>
+              <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  form: {
+    marginBottom: 32,
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  input: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  imagePicker: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  imagePickerText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  imagePreview: {
+    marginBottom: 16,
+  },
+  image: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 8,
+
+  },
+  publishButton: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#A5D6A7',
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#FF6347',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  gridContainer: {
     alignItems: 'center',
   },
   cardsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
+    justifyContent: 'space-between', // Adjust to space between cards
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    margin: 10,
-    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 3,
+    width: '48%', // Ensure two cards fit in one row
+    height: cardHeight, // Adjust height to fit all items
+    marginBottom: 10,
+    alignItems: 'center', // Center elements horizontally
+    justifyContent: 'center', // Center elements vertically
+    marginHorizontal: '0%', // Add horizontal gap
+    marginVertical: '0%', // Add vertical gap
   },
-  selectableProduct: {
-    flexDirection: 'row',
+  cardImage: {
+    width: '100%',
+    height: 140,
+    marginTop: 10, // Add gap to the top of the image
+    marginBottom: -100, // Decrease gap between image and name text
+  },
+  cardContent: {
+    padding: 12,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4, // Decrease gap between image and name field more
+    marginTop: -200, // Remove additional gap to the top of the name field
+  },
+  productDescription: {
+    fontSize: 16,
+    marginBottom: 25,
+  },
+  productPrice: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  editButton: {
+    backgroundColor: '#FFA500',
+    padding: 8,
+    borderRadius: 8,
     alignItems: 'center',
-    padding: 10,
-    margin: 10,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+    marginTop: 8,
+  },
+  productStatus: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  deleteButton: {
+    backgroundColor: '#F44336',
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  noProductsText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginTop: 32,
+  },
+  productCreatedAt: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
+  },
+  modal: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+  },
+  // Additional styles from index.tsx
+  scrollView: {
+    maxHeight: 200,
   },
   selectedProduct: {
     backgroundColor: '#e0e0e0',
@@ -362,21 +537,11 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     marginRight: 10,
+    marginTop: 10,
+    marginBottom: -1000,
   },
   productInfo: {
     flex: 1,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  productDescription: {
-    fontSize: 14,
-    color: '#888',
-  },
-  productPrice: {
-    fontSize: 14,
-    color: '#888',
   },
   checkbox: {
     marginLeft: 10,
@@ -387,37 +552,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 5,
-    marginTop: 10,
-  },
-  bidButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    marginTop: -400,
     marginBottom: 10,
   },
-  modalScrollView: {
-    maxHeight: 300, // Limit the height of the scroll view
+  button: {
+    padding: 10,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 5,
+    marginTop: 10,
   },
-  modalButtons: {
+  buttons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 20,
-  },
-  modalButton: {
-    padding: 10,
-    backgroundColor: '#007AFF',
-    borderRadius: 5,
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
   },
 });
