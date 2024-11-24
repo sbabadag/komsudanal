@@ -11,14 +11,14 @@ import {
   FlatList,
   Dimensions,
   Platform,
+  TextInput,
 } from 'react-native';
-import { getDatabase, ref, onValue, push, set, update, get } from 'firebase/database';
+import { getDatabase, ref, onValue, push, set, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import { Checkbox } from 'react-native-paper';
 
 // Define the Product type
 interface Product {
@@ -44,12 +44,96 @@ interface Bid {
 }
 
 const screenWidth = Dimensions.get('window').width;
-const isMobile = screenWidth < 768;
 const cardWidth = Platform.select({
   web: '13%', // 7 cards per row on web
   default: '48%', // 2 cards per row on other platforms
 });
-const cardHeight = 300; // Adjust height to fit all items
+
+const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedProducts: string[], setSelectedProducts: React.Dispatch<React.SetStateAction<string[]>> }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const productsRef = ref(db, `products/${user.uid}`);
+    
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const productsData = snapshot.val() || {};
+      const productsArray = Object.entries(productsData).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+      }));
+      setProducts(productsArray);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching products:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.drawerContainer}>
+      <Text style={styles.title}>Select Products to Offer</Text>
+      <View style={styles.cardsWrapper}>
+        {products.map((product) => (
+          <TouchableOpacity
+            key={product.id}
+            style={[
+              styles.card,
+              selectedProducts.includes(product.id) && styles.selectedProduct
+            ]}
+            onPress={() => {
+              setSelectedProducts(prev => {
+                const updatedSelectedProducts = prev.includes(product.id)
+                  ? prev.filter(id => id !== product.id)
+                  : [...prev, product.id];
+                return updatedSelectedProducts;
+              });
+            }}
+          >
+            <Image
+              source={{ uri: product.images[0] }}
+              style={styles.cardImage}
+            />
+            <View style={styles.cardContent}>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
+              <Text style={styles.productStatus}>Status: {product.status}</Text>
+              <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
+              <View style={styles.checkboxContainer}>
+                <Checkbox
+                  status={selectedProducts.includes(product.id) ? 'checked' : 'unchecked'}
+                  onPress={() => {
+                    setSelectedProducts(prev => {
+                      const updatedSelectedProducts = prev.includes(product.id)
+                        ? prev.filter(id => id !== product.id)
+                        : [...prev, product.id];
+                      return updatedSelectedProducts;
+                    });
+                  }}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  );
+};
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -58,7 +142,9 @@ export default function ProductsScreen() {
   const [targetProductId, setTargetProductId] = useState<string | null>(null);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
-  // const router = useRouter();
+  const [ownerPhotos, setOwnerPhotos] = useState<{ [key: string]: { photoUrl: string, nickname: string } }>({});
+  const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -136,6 +222,51 @@ export default function ProductsScreen() {
 
     return () => unsubscribe();
   }, []); // Empty dependency array to run only once
+
+  useEffect(() => {
+    const db = getDatabase();
+    const usersRef = ref(db, 'users');
+
+    const unsubscribe = onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const photos: { [key: string]: { photoUrl: string, nickname: string } } = {};
+        Object.keys(data).forEach((userId) => {
+          if (data[userId].profile && data[userId].profile.photoUrl && data[userId].profile.nickname) {
+            photos[userId] = {
+              photoUrl: data[userId].profile.photoUrl,
+              nickname: data[userId].profile.nickname,
+            };
+          }
+        });
+        setOwnerPhotos(photos);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const bidsRef = ref(db, 'bids');
+    
+    const unsubscribe = onValue(bidsRef, (snapshot) => {
+      const bids = snapshot.val() || {};
+      const counts: { [key: string]: number } = {};
+      
+      Object.values(bids).forEach((bid: any) => {
+        if (counts[bid.targetProductId]) {
+          counts[bid.targetProductId]++;
+        } else {
+          counts[bid.targetProductId] = 1;
+        }
+      });
+      
+      setBidCounts(counts);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const sendPushNotification = async (expoPushToken: string, message: string) => {
     const messageBody = {
@@ -226,61 +357,92 @@ export default function ProductsScreen() {
     }
   };
 
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
-    return <ActivityIndicator size="large" color="#0000ff" />;
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
   }
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search products..."
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+      </View>
+      <ScrollView style={styles.container}>
         <View style={styles.cardsWrapper}>
-          {products.map((product, index) => (
-            <View
+          {filteredProducts.map((product) => (
+            <TouchableOpacity
               key={product.id}
               style={[
                 styles.card,
-                { width: cardWidth === '13%' ? '13%' : '48%' }
+                selectedProducts.includes(product.id) && styles.selectedProduct
               ]}
+              onPress={() => {
+                setTargetProductId(product.id);
+                setModalVisible(true);
+              }}
             >
-              <FlatList
-                horizontal
-                data={product.images}
-                renderItem={({ item }) => (
-                  <Image
-                    source={
-                      Platform.OS === 'web'
-                        ? { uri: item }
-                        : { uri: item }
-                    }
-                    style={styles.productImage}
-                  />
-                )}
-                keyExtractor={(_, index) => index.toString()}
-                showsHorizontalScrollIndicator={false}
+              <Image
+                source={{ uri: product.images[0] }}
+                style={styles.cardImage}
               />
-              <View style={styles.productInfo}>
+              <View style={styles.cardContent}>
                 <Text style={styles.productName}>{product.name}</Text>
                 <Text style={styles.productDescription}>{product.description}</Text>
-                <Text style={styles.productPrice}>
-                  ${product.priceStart} - ${product.priceEnd}
+                <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
+                <Text style={styles.productCreatedAt}>
+                  Created: {new Date(product.createdAt).toLocaleDateString()}
                 </Text>
+                <Text style={styles.bidCount}>
+                  Bids: {bidCounts[product.id] || 0}
+                </Text>
+                <View style={styles.ownerInfo}>
+                  <Image
+                    source={{ uri: ownerPhotos[product.userId]?.photoUrl || 'https://placeholder.com/user' }}
+                    style={styles.ownerPhoto}
+                  />
+                  <Text style={styles.ownerNickname}>
+                    {ownerPhotos[product.userId]?.nickname || 'NoName'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.bidButton, { marginTop: 8 }]}
+                  onPress={() => {
+                    setTargetProductId(product.id);
+                    setModalVisible(true);
+                  }}
+                >
+                  <Text style={styles.buttonText}>Place Bid</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.bidButton}
-                onPress={() => {
-                  setTargetProductId(product.id);
-                  setModalVisible(true);
-                }}
-              >
-                <Text style={styles.buttonText}>Place a Bid</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
-      <Modal isVisible={isModalVisible}>
-        <View style={styles.modal}>
-          <MyProductsScreen />
+      <Modal
+        isVisible={isModalVisible}
+        onBackdropPress={() => {
+          setModalVisible(false);
+          Alert.alert("Close", "Are you sure you want to close this window?"); // Add alert text
+        }}
+        style={styles.modal}
+        animationIn="slideInUp"
+        animationOut="slideOutDown"
+      >
+        <View style={styles.modalContent}>
+          <MyProductsScreen selectedProducts={selectedProducts} setSelectedProducts={setSelectedProducts} />
           <View style={styles.buttons}>
             <TouchableOpacity
               style={styles.button}
@@ -301,81 +463,6 @@ export default function ProductsScreen() {
   );
 }
 
-const MyProductsScreen = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-
-  useEffect(() => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const db = getDatabase();
-    const productsRef = ref(db, `products/${user.uid}`);
-    
-    const unsubscribe = onValue(productsRef, (snapshot) => {
-      const productsData = snapshot.val() || {};
-      const productsArray = Object.entries(productsData).map(([id, data]: [string, any]) => ({
-        id,
-        ...data,
-      }));
-      setProducts(productsArray);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching products:', error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Select Products to Offer</Text>
-      <View style={styles.cardsWrapper}>
-        {products.map((product) => (
-          <TouchableOpacity
-            key={product.id}
-            style={[
-              styles.card,
-              selectedProducts.includes(product.id) && styles.selectedProduct
-            ]}
-            onPress={() => {
-              setSelectedProducts(prev => {
-                const updatedSelectedProducts = prev.includes(product.id)
-                  ? prev.filter(id => id !== product.id)
-                  : [...prev, product.id];
-                return updatedSelectedProducts;
-              });
-            }}
-          >
-            <Image
-              source={{ uri: product.images[0] }}
-              style={styles.cardImage}
-            />
-            <View style={styles.cardContent}>
-              <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productDescription}>{product.description}</Text>
-              <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
-              <Text style={styles.productStatus}>Status: {product.status}</Text>
-              <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
-  );
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -392,68 +479,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
   },
-  form: {
-    marginBottom: 32,
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  input: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  imagePicker: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  imagePickerText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  imagePreview: {
-    marginBottom: 16,
-  },
-  image: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 8,
-
-  },
-  publishButton: {
-    backgroundColor: '#4CAF50',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#A5D6A7',
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#FF6347',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  gridContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   cardsWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -468,93 +493,46 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    width: '48%', // Ensure two cards fit in one row
-    marginBottom: 10,
-    alignItems: 'center', // Center elements horizontally
-    justifyContent: 'center', // Center elements vertically
-    height: 300, // Set a fixed height based on the maximum height needed
+    width: Platform.select({
+      web: '13%', // 7 cards per row on web
+      default: '48%', // 2 cards per row on other platforms
+    }),
+    marginBottom: 16,
+    marginHorizontal: '0.5%',
   },
-  cardImage: {
+  productImage: {
     width: '100%',
     height: 140,
-    marginTop: 10, // Add gap to the top of the image
-    marginBottom: -100, // Decrease gap between image and name text
+    marginBottom: 10, // Add gap between image and name text
   },
-  cardContent: {
-    padding: 12,
-    alignItems: 'center', // Center elements horizontally inside the card content
+  productInfo: {
+    alignItems: 'center', // Center elements horizontally inside the product info
     justifyContent: 'center', // Center elements vertically
-
   },
   productName: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 4, // Decrease gap between image and name field more
-    marginTop: -200, // Remove additional gap to the top of the name field
-  },
-  productDescription: {
-    fontSize: 16,
-    marginBottom: 25,
+    marginBottom: 4, // Decrease gap between name and price text
   },
   productPrice: {
     fontSize: 16,
     fontWeight: '600',
-    marginTop: 4,
     marginBottom: 10,
   },
-  editButton: {
-    backgroundColor: '#FFA500',
-    padding: 8,
-    borderRadius: 8,
+  ownerInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginBottom: 10,
   },
-  productStatus: {
+  ownerPhoto: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  ownerNickname: {
     fontSize: 16,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  deleteButton: {
-    backgroundColor: '#F44336',
-    padding: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  noProductsText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginTop: 32,
-  },
-  productCreatedAt: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
-  },
-  modal: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-  },
-  // Additional styles from index.tsx
-  scrollView: {
-    maxHeight: 200,
-  },
-  selectedProduct: {
-    backgroundColor: '#e0e0e0',
-  },
-  productImage: {
-    width: 100,
-    height: 100,
-    marginTop: 10,
-    marginBottom: -1000,
-  },
-  productInfo: {
-    flex: 1,
-  },
-  checkbox: {
-    marginLeft: 10,
+    color: '#007AFF',
   },
   bidButton: {
     padding: 10,
@@ -562,8 +540,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 5,
-    marginTop: -400,
-    marginBottom: 10,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+  },
+  buttons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
   button: {
     padding: 10,
@@ -571,11 +565,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 5,
+  },
+  cancelButton: {
+    padding: 10,
+    backgroundColor: '#FF6347',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 5,
+  },
+  drawerContainer: {
+    maxHeight: 400, // Adjust the height to fit the drawer
+  },
+  selectedProduct: {
+    backgroundColor: '#e0e0e0',
+  },
+  cardContent: {
+    padding: 12,
+  },
+  checkboxContainer: {
     marginTop: 10,
   },
-  buttons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
+  cardImage: {
+    width: '100%',
+    height: 160,
+  },
+  productStatus: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
+  },
+  productCreatedAt: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 4,
+  },
+  productDescription: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  bidCount: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  searchContainer: {
+    padding: 16,
+    backgroundColor: 'white',
+  },
+  searchInput: {
+    height: 40,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f5f5f5',
   },
 });

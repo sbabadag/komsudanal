@@ -9,6 +9,7 @@ interface UserProfile {
   phone: string;
   address: string;
   photoUrl?: string;
+  nickname?: string; // Add nickname field
 }
 
 export default function ProfileScreen() {
@@ -18,6 +19,7 @@ export default function ProfileScreen() {
     phone: '',
     address: '',
     photoUrl: '',
+    nickname: '', // Initialize nickname
   });
 
   // Load existing profile data
@@ -130,6 +132,13 @@ export default function ProfileScreen() {
           placeholder="Full Name"
           value={profile.fullName}
           onChangeText={(text) => setProfile(prev => ({ ...prev, fullName: text }))}
+        />
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Nickname" // Add nickname input
+          value={profile.nickname}
+          onChangeText={(text) => setProfile(prev => ({ ...prev, nickname: text }))}
         />
         
         <TextInput
