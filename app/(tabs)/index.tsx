@@ -14,12 +14,13 @@ import {
   TextInput,
   AppState,
 } from 'react-native';
-import { getDatabase, ref, onValue, push, set, get } from 'firebase/database';
+import { getDatabase, ref, onValue, push, set, get, remove } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Notifications from 'expo-notifications';
 import { Checkbox } from 'react-native-paper';
+import { FontAwesome } from '@expo/vector-icons';
 
 // Define the Product type
 interface Product {
@@ -147,6 +148,7 @@ export default function ProductsScreen() {
   const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
+  const [likedProducts, setLikedProducts] = useState<string[]>([]);
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -393,6 +395,44 @@ export default function ProductsScreen() {
     }
   };
 
+  const handleLikeProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}/${productId}`);
+
+    try {
+      if (likedProducts.includes(productId)) {
+        await remove(likesRef);
+        setLikedProducts((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await set(likesRef, true);
+        setLikedProducts((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      console.error('Error updating likes:', error);
+      Alert.alert('Error', 'Failed to update likes');
+    }
+  };
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}`);
+
+    const unsubscribe = onValue(likesRef, (snapshot) => {
+      const likesData = snapshot.val() || {};
+      setLikedProducts(Object.keys(likesData));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -430,6 +470,16 @@ export default function ProductsScreen() {
                 setModalVisible(true);
               }}
             >
+              <TouchableOpacity
+                style={styles.likeButton}
+                onPress={() => handleLikeProduct(product.id)}
+              >
+                <FontAwesome
+                  name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                  size={24}
+                  color="red"
+                />
+              </TouchableOpacity>
               <Image
                 source={{ uri: product.images[0] }}
                 style={styles.cardImage}
@@ -685,5 +735,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  likeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
 });

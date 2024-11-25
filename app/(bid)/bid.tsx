@@ -11,11 +11,12 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { getDatabase, ref, onValue, push, set } from 'firebase/database';
+import { getDatabase, ref, onValue, push, set, remove } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { FontAwesome } from '@expo/vector-icons';
 
 // Define the Product type
 interface Product {
@@ -49,6 +50,7 @@ export default function ProductsScreen() {
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
   const [bids, setBids] = useState<Bid[]>([]);
+  const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const router = useRouter();
 
   // Fetch all products except user's own
@@ -152,6 +154,22 @@ export default function ProductsScreen() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}`);
+
+    const unsubscribe = onValue(likesRef, (snapshot) => {
+      const likesData = snapshot.val() || {};
+      setLikedProducts(Object.keys(likesData));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handleBidSubmit = async (productId: string) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -199,6 +217,28 @@ export default function ProductsScreen() {
     } catch (error) {
       console.error('Error submitting bid:', error);
       Alert.alert('Error', 'There was an error submitting your bid. Please try again.');
+    }
+  };
+
+  const handleLikeProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}/${productId}`);
+
+    try {
+      if (likedProducts.includes(productId)) {
+        await remove(likesRef);
+        setLikedProducts((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await set(likesRef, true);
+        setLikedProducts((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      console.error('Error updating likes:', error);
+      Alert.alert('Error', 'Failed to update likes');
     }
   };
 
@@ -260,6 +300,16 @@ export default function ProductsScreen() {
       <ScrollView contentContainerStyle={viewStyles.container}>
         {products.map((product) => (
           <View key={product.id} style={[viewStyles.card, { width: cardWidth }]}>
+            <TouchableOpacity
+              style={viewStyles.likeButton}
+              onPress={() => handleLikeProduct(product.id)}
+            >
+              <FontAwesome
+                name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                size={24}
+                color="red"
+              />
+            </TouchableOpacity>
             <FlatList
               horizontal
               data={product.images}
@@ -421,6 +471,12 @@ const viewStyles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 5,
     marginTop: 10,
+  },
+  likeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
 });
 

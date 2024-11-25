@@ -14,6 +14,7 @@ import {
 import { getDatabase, ref, push, set, onValue, remove } from 'firebase/database';
 import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from 'firebase/auth';
+import { FontAwesome } from '@expo/vector-icons';
 
 interface Product {
   id: string;
@@ -41,6 +42,7 @@ export default function MyProductsScreen() {
     status: 'published' as 'draft' | 'published',
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [likedProducts, setLikedProducts] = useState<string[]>([]);
 
   useEffect(() => {
     const auth = getAuth();
@@ -62,6 +64,22 @@ export default function MyProductsScreen() {
     }, (error) => {
       console.error('Error fetching products:', error);
       setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}`);
+
+    const unsubscribe = onValue(likesRef, (snapshot) => {
+      const likesData = snapshot.val() || {};
+      setLikedProducts(Object.keys(likesData));
     });
 
     return () => unsubscribe();
@@ -276,6 +294,28 @@ export default function MyProductsScreen() {
     );
   };
 
+  const handleLikeProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}/${productId}`);
+
+    try {
+      if (likedProducts.includes(productId)) {
+        await remove(likesRef);
+        setLikedProducts((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await set(likesRef, true);
+        setLikedProducts((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      console.error('Error updating likes:', error);
+      Alert.alert('Error', 'Failed to update likes');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -361,6 +401,16 @@ export default function MyProductsScreen() {
                   })
                 ]}
               >
+                <TouchableOpacity
+                  style={styles.likeButton}
+                  onPress={() => handleLikeProduct(product.id)}
+                >
+                  <FontAwesome
+                    name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                    size={24}
+                    color="red"
+                  />
+                </TouchableOpacity>
                 <Image
                   source={{ uri: product.images?.[0] || 'https://via.placeholder.com/150' }}
                   style={styles.cardImage}
@@ -536,6 +586,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+  },
+  likeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
   noProductsText: {
     textAlign: 'center',

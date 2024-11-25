@@ -11,9 +11,10 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { getDatabase, ref, onValue, update } from 'firebase/database';
+import { getDatabase, ref, onValue, update, remove, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
+import { FontAwesome } from '@expo/vector-icons';
 
 interface Bid {
   id: string;
@@ -43,6 +44,7 @@ export default function BidsOnMyProductsScreen() {
   const [bids, setBids] = useState<Bid[]>([]);
   const [products, setProducts] = useState<{ [key: string]: Product }>({});
   const [loading, setLoading] = useState(true);
+  const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -132,6 +134,44 @@ export default function BidsOnMyProductsScreen() {
     }
   };
 
+  const handleLikeProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}/${productId}`);
+
+    try {
+      if (likedProducts.includes(productId)) {
+        await remove(likesRef);
+        setLikedProducts((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await set(likesRef, true);
+        setLikedProducts((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      console.error('Error updating likes:', error);
+      Alert.alert('Error', 'Failed to update likes');
+    }
+  };
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}`);
+
+    const unsubscribe = onValue(likesRef, (snapshot) => {
+      const likesData = snapshot.val() || {};
+      setLikedProducts(Object.keys(likesData));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   if (loading) {
     return <ActivityIndicator size="large" color="#0000ff" />;
   }
@@ -151,6 +191,16 @@ export default function BidsOnMyProductsScreen() {
               <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
                 {product && (
                   <View style={styles.productSection}>
+                    <TouchableOpacity
+                      style={styles.likeButton}
+                      onPress={() => handleLikeProduct(product.id)}
+                    >
+                      <FontAwesome
+                        name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                        size={24}
+                        color="red"
+                      />
+                    </TouchableOpacity>
                     <Text style={styles.sectionTitle}>Product You Want</Text>
                     <View style={styles.productCard}>
                       <Image source={{ uri: product.images[0] }} style={styles.productImage} />
@@ -309,5 +359,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#666',
+  },
+  likeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
 });

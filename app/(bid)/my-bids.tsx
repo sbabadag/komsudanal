@@ -10,8 +10,9 @@ import {
   Platform,
 } from 'react-native';
 import { getAuth } from 'firebase/auth';
-import { getDatabase, ref, onValue, remove } from 'firebase/database';
+import { getDatabase, ref, onValue, remove, set } from 'firebase/database';
 import { useRouter } from 'expo-router';
+import { FontAwesome } from '@expo/vector-icons';
 
 interface Bid {
   id: string;
@@ -25,6 +26,7 @@ interface Bid {
 export default function MyBidsScreen() {
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [products, setProducts] = useState<{[key: string]: any}>({});
+  const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -74,6 +76,22 @@ export default function MyBidsScreen() {
     });
   }, []); // Empty dependency array to run only once
 
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}`);
+
+    const unsubscribe = onValue(likesRef, (snapshot) => {
+      const likesData = snapshot.val() || {};
+      setLikedProducts(Object.keys(likesData));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handleCancelBid = async (bidId: string) => {
     try {
       const auth = getAuth();
@@ -87,6 +105,28 @@ export default function MyBidsScreen() {
       Alert.alert('Success', 'Bid cancelled successfully');
     } catch (error) {
       Alert.alert('Error', 'Failed to cancel bid');
+    }
+  };
+
+  const handleLikeProduct = async (productId: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const likesRef = ref(db, `likes/${user.uid}/${productId}`);
+
+    try {
+      if (likedProducts.includes(productId)) {
+        await remove(likesRef);
+        setLikedProducts((prev) => prev.filter((id) => id !== productId));
+      } else {
+        await set(likesRef, true);
+        setLikedProducts((prev) => [...prev, productId]);
+      }
+    } catch (error) {
+      console.error('Error updating likes:', error);
+      Alert.alert('Error', 'Failed to update likes');
     }
   };
 
@@ -117,6 +157,16 @@ export default function MyBidsScreen() {
   
     return (
       <View key={bid.id} style={styles.bidCard}>
+        <TouchableOpacity
+          style={styles.likeButton}
+          onPress={() => handleLikeProduct(targetProduct.id)}
+        >
+          <FontAwesome
+            name={likedProducts.includes(targetProduct.id) ? 'heart' : 'heart-o'}
+            size={24}
+            color="red"
+          />
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.cardContent}
           onPress={() => router.push({
@@ -410,5 +460,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  likeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
   },
 });
