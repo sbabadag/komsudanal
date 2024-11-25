@@ -1,5 +1,6 @@
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
-import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -24,7 +25,20 @@ export default function Login() {
     webClientId: '817455873090-7321qin1jnaou6rmu4a6dfktprioirnr.apps.googleusercontent.com',
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const checkStoredCredentials = async () => {
+      const storedEmail = await AsyncStorage.getItem('email');
+      const storedPassword = await AsyncStorage.getItem('password');
+      if (storedEmail && storedPassword) {
+        setCredentials({ email: storedEmail, password: storedPassword });
+        handleLogin(storedEmail, storedPassword);
+      }
+    };
+
+    checkStoredCredentials();
+  }, []);
+
+  useEffect(() => {
     if (response?.type === 'success') {
       const { authentication } = response;
       console.log(authentication);
@@ -32,8 +46,8 @@ export default function Login() {
     }
   }, [response]);
 
-  const handleLogin = async () => {
-    if (!credentials.email || !credentials.password) {
+  const handleLogin = async (email = credentials.email, password = credentials.password) => {
+    if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password');
       return;
     }
@@ -41,13 +55,11 @@ export default function Login() {
     try {
       setIsLoading(true);
       const auth = getAuth();
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        credentials.email,
-        credentials.password
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
       if (userCredential.user) {
+        await AsyncStorage.setItem('email', email);
+        await AsyncStorage.setItem('password', password);
         router.replace('/(tabs)');
       }
     } catch (error: any) {
@@ -130,7 +142,7 @@ export default function Login() {
               styles.loginButton,
               isLoading && { opacity: 0.7 }
             ]} 
-            onPress={handleLogin}
+            onPress={() => handleLogin()}
             disabled={isLoading}
           >
             <Text style={styles.loginButtonText}>

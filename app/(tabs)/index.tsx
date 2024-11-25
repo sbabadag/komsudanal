@@ -145,6 +145,7 @@ export default function ProductsScreen() {
   const [ownerPhotos, setOwnerPhotos] = useState<{ [key: string]: { photoUrl: string, nickname: string } }>({});
   const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -253,6 +254,7 @@ export default function ProductsScreen() {
     const unsubscribe = onValue(bidsRef, (snapshot) => {
       const bids = snapshot.val() || {};
       const counts: { [key: string]: number } = {};
+      let unresultedBidsCount = 0;
       
       Object.values(bids).forEach((bid: any) => {
         if (counts[bid.targetProductId]) {
@@ -260,9 +262,13 @@ export default function ProductsScreen() {
         } else {
           counts[bid.targetProductId] = 1;
         }
+        if (bid.status === 'pending') {
+          unresultedBidsCount++;
+        }
       });
       
       setBidCounts(counts);
+      setUnresultedBidsCount(unresultedBidsCount);
     });
 
     return () => unsubscribe();

@@ -23,6 +23,7 @@ interface Bid {
   createdAt: number;
   userId: string;
   notification?: string;
+  targetProductOwnerId : string;
 }
 
 interface Product {
