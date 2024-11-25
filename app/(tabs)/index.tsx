@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     position: 'absolute',
-    top: 10,
+    top: Platform.OS === 'ios' ? 40 : 10, // Adjust top position for iPhone
     right: 10,
   },
   logo: {

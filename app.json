@@ -4,18 +4,21 @@
     "slug": "komsudanal",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-logo.png",
     "scheme": "komsudanal",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/app-logo.png",
+      "backgroundColor": "#FEF9B0"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sbabadag.komsudanal"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "package": "com.sbabadag.komsudanal"
     },
