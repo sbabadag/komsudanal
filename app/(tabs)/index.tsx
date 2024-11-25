@@ -12,6 +12,7 @@ import {
   Dimensions,
   Platform,
   TextInput,
+  AppState,
 } from 'react-native';
 import { getDatabase, ref, onValue, push, set, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
@@ -274,6 +275,35 @@ export default function ProductsScreen() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        // Refresh the counter when the app becomes active
+        const db = getDatabase();
+        const bidsRef = ref(db, 'bids');
+        
+        onValue(bidsRef, (snapshot) => {
+          const bids: { [key: string]: Bid } = snapshot.val() || {};
+          let unresultedBidsCount = 0;
+          
+          Object.values(bids).forEach((bid: Bid) => {
+            if (bid.status === 'pending') {
+              unresultedBidsCount++;
+            }
+          });
+          
+          setUnresultedBidsCount(unresultedBidsCount);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const sendPushNotification = async (expoPushToken: string, message: string) => {
     const messageBody = {
       to: expoPushToken,
@@ -465,7 +495,15 @@ export default function ProductsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+      <View style={styles.logoContainer}>
+        <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
+        {unresultedBidsCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
+          </View>
+        )}
+      </View>
+    </View> 
   );
 }
 
@@ -625,5 +663,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     backgroundColor: '#f5f5f5',
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
+  logo: {
+    width: 50,
+    height: 50,
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    padding: 5,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
