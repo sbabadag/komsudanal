@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/app-logo.png",
-      "backgroundColor": "#FEF9B0"
+      "backgroundColor": "#f5f5f5"
     },
     "ios": {
       "supportsTablet": true,

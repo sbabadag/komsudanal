@@ -10,7 +10,7 @@ import MyProductsScreen from './(tabs)/my-products';
 import BidsOnMyProductsScreen from '../app/(bid)/bids-on-my-products';
 import ProfileScreen from '../app/(tabs)/profile';
 import '../config/firebaseConfig';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, Platform } from 'react-native';
 import { getDatabase, ref, onValue } from 'firebase/database';
 
 const Tab = createBottomTabNavigator();
@@ -39,6 +39,9 @@ function TabNavigator() {
 
   return (
     <View style={{ flex: 1 }}>
+      <View style={styles.logoContainer}>
+        <Image source={require('../assets/images/logo.png')} style={styles.logo} />
+      </View>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, size }) => {
@@ -94,9 +97,19 @@ function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
+  logoContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 10, // Adjust top position for iPhone
+    left: 10, // Move to the left
+    zIndex: 1, // Ensure it is above other elements
+  },
+  logo: {
+    width: 40,
+    height: 40,
+  },
   userProfileContainer: {
     position: 'absolute',
-    top: 10,
+    top: 50,
     right: 10,
     flexDirection: 'row', // Align items in a row
     alignItems: 'center',

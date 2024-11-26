@@ -545,14 +545,12 @@ export default function ProductsScreen() {
           </View>
         </View>
       </Modal>
-      <View style={styles.logoContainer}>
-        <Image source={require('../../assets/images/logo.png')} style={styles.logo} />
-        {unresultedBidsCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
-          </View>
-        )}
-      </View>
+      {/* Remove the logo container */}
+      {unresultedBidsCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
+        </View>
+      )}
     </View> 
   );
 }
@@ -615,8 +613,10 @@ const styles = StyleSheet.create({
   },
   ownerInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start', // Align items to the top
+    justifyContent: 'flex-start', // Align items to the left
     marginBottom: 10,
+    marginTop: 24, // Adjust margin to move it downwards
   },
   ownerPhoto: {
     width: 24,
@@ -713,15 +713,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     backgroundColor: '#f5f5f5',
-  },
-  logoContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 40 : 10, // Adjust top position for iPhone
-    right: 10,
-  },
-  logo: {
-    width: 50,
-    height: 50,
   },
   badge: {
     position: 'absolute',
