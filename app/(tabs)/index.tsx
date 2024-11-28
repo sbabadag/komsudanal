@@ -546,11 +546,7 @@ export default function ProductsScreen() {
         </View>
       </Modal>
       {/* Remove the logo container */}
-      {unresultedBidsCount > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
-        </View>
-      )}
+
     </View> 
   );
 }

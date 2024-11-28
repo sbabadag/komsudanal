@@ -397,7 +397,7 @@ export default function MyProductsScreen() {
                   styles.card,
                   Platform.select({
                     web: { width: '13%', margin: '1%' },
-                    default: { width: '46%', marginHorizontal: '2%', marginBottom: 16 }
+                    default: { width: '48%', marginHorizontal: '1%', marginBottom: 16 } // Ensure two cards fit in one row on mobile
                   })
                 ]}
               >
