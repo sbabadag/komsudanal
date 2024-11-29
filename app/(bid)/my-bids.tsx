@@ -62,10 +62,12 @@ export default function MyBidsScreen() {
     onValue(bidsRef, (snapshot) => {
       const bidsData = snapshot.val();
       if (bidsData) {
-        const userBids = Object.entries(bidsData).filter(([key, value]: [string, any]) => value.userId === user.uid).map(([key, value]: [string, any]) => ({
-          id: key,
-          ...value,
-        }));
+        const userBids = Object.entries(bidsData)
+          .filter(([key, value]: [string, any]) => value.userId === user.uid)
+          .map(([key, value]: [string, any]) => ({
+            id: key,
+            ...value,
+          }));
         setMyBids(userBids.sort((a, b) => b.createdAt - a.createdAt));
       } else {
         console.log('No bids found');
@@ -92,6 +94,22 @@ export default function MyBidsScreen() {
     return () => unsubscribe();
   }, []);
 
+  const updateUnresultedBidsCount = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
+    const bidsRef = ref(db, 'bids');
+
+    onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      const pendingBids = Object.values(bidsData).filter((bid: any) => bid.userId === user.uid && bid.status === 'pending');
+      set(unresultedBidsRef, pendingBids.length);
+    });
+  };
+
   const handleCancelBid = async (bidId: string) => {
     try {
       const auth = getAuth();
@@ -102,6 +120,7 @@ export default function MyBidsScreen() {
       const bidRef = ref(db, `bids/${bidId}`);
       
       await remove(bidRef);
+      await updateUnresultedBidsCount();
       Alert.alert('Success', 'Bid cancelled successfully');
     } catch (error) {
       Alert.alert('Error', 'Failed to cancel bid');

@@ -60,10 +60,11 @@ export default function BidsOnMyProductsScreen() {
     const unsubscribeBids = onValue(bidsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const userBids = Object.values(data).filter((bid) => {
-          const bidData = bid as Bid;
-          return bidData.targetProductOwnerId === user.uid;
-        }) as Bid[];
+        const userBids = Object.values(data)
+          .filter((bid) => {
+            const bidData = bid as Bid;
+            return bidData.targetProductOwnerId === user.uid;
+          }) as Bid[];
         setBids(userBids);
       }
       setLoading(false);
@@ -103,6 +104,22 @@ export default function BidsOnMyProductsScreen() {
     updateTabBadge(resultedBidsCount);
   }, [bids, navigation]);
 
+  const updateUnansweredBidsCount = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const unansweredBidsRef = ref(db, `users/${user.uid}/unansweredBidsOnMyProductsCount`);
+    const bidsRef = ref(db, 'bids');
+
+    onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      const pendingBids = Object.values(bidsData).filter((bid: any) => bid.targetProductOwnerId === user.uid && bid.status === 'pending');
+      set(unansweredBidsRef, pendingBids.length);
+    });
+  };
+
   const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
     const db = getDatabase();
     const bidRef = ref(db, `bids/${bidId}`);
@@ -123,11 +140,7 @@ export default function BidsOnMyProductsScreen() {
     try {
       await update(bidRef, { status, notification: `Your bid has been ${status}.` });
       Alert.alert('Success', `Bid has been ${status}.`);
-      // Update the tab badge number after handling the bid response
-      const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
-      navigation.setOptions({
-        tabBarBadge: resultedBidsCount > 0 ? resultedBidsCount : null,
-      });
+      await updateUnansweredBidsCount(); // Recalculate unanswered bids count
     } catch (error) {
       console.error(`Error updating bid status to ${status}:`, error);
       Alert.alert('Error', `There was an error updating the bid status. Please try again.`);

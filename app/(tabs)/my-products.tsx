@@ -112,6 +112,22 @@ export default function MyProductsScreen() {
     }
   };
 
+  const updateUnresultedBidsCount = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+  
+    const db = getDatabase();
+    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
+    const bidsRef = ref(db, 'bids');
+  
+    onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      const userBids = Object.values(bidsData).filter((bid: any) => bid.targetProductOwnerId === user.uid && bid.status === 'pending');
+      set(unresultedBidsRef, userBids.length);
+    });
+  };
+
   const handlePublish = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -156,6 +172,8 @@ export default function MyProductsScreen() {
         id: newProductRef.key,
         userId: user.uid,
       });
+
+      await updateUnresultedBidsCount();
 
       setNewProduct({
         name: '',
@@ -229,6 +247,8 @@ export default function MyProductsScreen() {
         id: editingProduct.id,
         userId: user.uid,
       });
+
+      await updateUnresultedBidsCount();
 
       setNewProduct({
         name: '',

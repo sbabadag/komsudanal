@@ -1,8 +1,9 @@
 import { getDatabase, onValue, ref, set } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signOut } from 'firebase/auth';
 import { Alert, ScrollView, Text, TextInput, StyleSheet, TouchableOpacity, View, Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 
 interface UserProfile {
   fullName: string;
@@ -21,6 +22,8 @@ export default function ProfileScreen() {
     photoUrl: '',
     nickname: '', // Initialize nickname
   });
+
+  const navigation = useNavigation<NavigationProp<any>>();
 
   // Load existing profile data
   useEffect(() => {
@@ -99,6 +102,16 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+      navigation.navigate('SignIn');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.profileSection}>
@@ -169,6 +182,10 @@ export default function ProfileScreen() {
           <Text style={styles.saveButtonText}>
             {isLoading ? 'Saving...' : 'Save Profile'}
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutButtonText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -257,5 +274,25 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  signOutButton: {
+    backgroundColor: '#FF6347',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6347',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signOutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

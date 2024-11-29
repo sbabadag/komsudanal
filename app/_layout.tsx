@@ -11,7 +11,7 @@ import BidsOnMyProductsScreen from '../app/(bid)/bids-on-my-products';
 import ProfileScreen from '../app/(tabs)/profile';
 import '../config/firebaseConfig';
 import { View, Text, Image, StyleSheet, Platform, TouchableOpacity, Animated, Dimensions, PanResponder } from 'react-native';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, set } from 'firebase/database';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 
 const Tab = createBottomTabNavigator();
@@ -20,8 +20,9 @@ const screenWidth = Dimensions.get('window').width;
 
 function TabNavigator() {
   const [userProfile, setUserProfile] = useState<{ photoUrl: string, fullName: string, nickname: string } | null>(null);
-  const [unresultedBidsCount, setUnresultedBidsCount] = useState(0); // Add state for unresulted bids count
-  const [drawerAnimation] = useState(new Animated.Value(-screenWidth)); // Initialize drawer animation value
+  const [unansweredBidsOnMyProductsCount, setUnansweredBidsOnMyProductsCount] = useState(0);
+  const [myUnresultedBidsCount, setMyUnresultedBidsCount] = useState(0);
+  const [drawerAnimation] = useState(new Animated.Value(-screenWidth));
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
   const navigation = useNavigation<NavigationProp<any>>();
@@ -33,7 +34,8 @@ function TabNavigator() {
 
     const db = getDatabase();
     const userProfileRef = ref(db, `users/${user.uid}/profile`);
-    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`); // Reference for unresulted bids count
+    const unansweredBidsOnMyProductsRef = ref(db, `users/${user.uid}/unansweredBidsOnMyProductsCount`);
+    const myUnresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
 
     const unsubscribeProfile = onValue(userProfileRef, (snapshot) => {
       const data = snapshot.val();
@@ -42,18 +44,57 @@ function TabNavigator() {
       }
     });
 
-    const unsubscribeBids = onValue(unresultedBidsRef, (snapshot) => {
+    const unsubscribeBidsOnMyProducts = onValue(unansweredBidsOnMyProductsRef, (snapshot) => {
       const count = snapshot.val();
       if (count !== null) {
-        setUnresultedBidsCount(count);
+        setUnansweredBidsOnMyProductsCount(count);
+      }
+    });
+
+    const unsubscribeMyBids = onValue(myUnresultedBidsRef, (snapshot) => {
+      const count = snapshot.val();
+      if (count !== null) {
+        setMyUnresultedBidsCount(count);
       }
     });
 
     return () => {
       unsubscribeProfile();
-      unsubscribeBids();
+      unsubscribeBidsOnMyProducts();
+      unsubscribeMyBids();
     };
   }, []);
+
+  const updateUnansweredBidsCount = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const unansweredBidsOnMyProductsRef = ref(db, `users/${user.uid}/unansweredBidsOnMyProductsCount`);
+    const myUnresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
+    const bidsRef = ref(db, 'bids');
+
+    onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      const pendingBidsOnMyProducts = Object.values(bidsData).filter((bid: any) => bid.targetProductOwnerId === user.uid && bid.status === 'pending');
+      const myPendingBids = Object.values(bidsData).filter((bid: any) => bid.userId === user.uid && bid.status === 'pending');
+      set(unansweredBidsOnMyProductsRef, pendingBidsOnMyProducts.length);
+      set(myUnresultedBidsRef, myPendingBids.length);
+    });
+  };
+
+  useEffect(() => {
+    updateUnansweredBidsCount();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      updateUnansweredBidsCount();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const toggleDrawer = () => {
     if (isDrawerOpen) {
@@ -103,9 +144,9 @@ function TabNavigator() {
       <View style={styles.logoContainer}>
         <TouchableOpacity onPress={toggleDrawer}>
           <Image source={require('../assets/images/logo.png')} style={styles.logo} />
-          {unresultedBidsCount > 0 && (
+          {unansweredBidsOnMyProductsCount > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
+              <Text style={styles.badgeText}>{unansweredBidsOnMyProductsCount}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -140,12 +181,19 @@ function TabNavigator() {
           name="Home" 
           component={HomeScreen}
           options={{
-            tabBarLabel: 'Home'
+            tabBarLabel: 'Home',
           }}
         />
         <Tab.Screen 
           name="My Bids" 
           component={MyBidsScreen}
+          options={{
+            tabBarBadge: myUnresultedBidsCount > 0 ? myUnresultedBidsCount : undefined,
+            tabBarBadgeStyle: { backgroundColor: 'green' },
+          }}
+          listeners={{
+            tabPress: () => setMyUnresultedBidsCount(0), // Clear badge count when tab is pressed
+          }}
         />
         <Tab.Screen 
           name="My Products" 
@@ -154,10 +202,14 @@ function TabNavigator() {
         <Tab.Screen 
           name="Bids On My Products" 
           component={BidsOnMyProductsScreen}
+          options={{
+            tabBarBadge: unansweredBidsOnMyProductsCount > 0 ? unansweredBidsOnMyProductsCount : undefined,
+            tabBarBadgeStyle: { backgroundColor: 'red' },
+          }}
         />
         <Tab.Screen 
           name="Profile" 
-          component={ProfileScreen} // Add Profile screen to the tab navigator
+          component={ProfileScreen}
         />
       </Tab.Navigator>
       <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerAnimation }] }]}>
@@ -253,15 +305,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginLeft: 10,
   },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
 });
 
 export default function RootLayout() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigation = useNavigation<NavigationProp<any>>();
+
+  const updateUnresultedBidsCount = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
+    const bidsRef = ref(db, 'bids');
+
+    onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      const userBids = Object.values(bidsData).filter((bid: any) => bid.targetProductOwnerId === user.uid && bid.status === 'pending');
+      set(unresultedBidsRef, userBids.length);
+    });
+  };
 
   useEffect(() => {
     const auth = getAuth();
     onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user);
+      if (user) {
+        updateUnresultedBidsCount();
+      }
     });
   }, []);
 
@@ -274,11 +351,62 @@ export default function RootLayout() {
           options={{ headerShown: false }}
         />
       ) : (
-        <Stack.Screen 
-          name="Main" 
-          component={TabNavigator}
-          options={{ headerShown: false }} 
-        />
+        <>
+          <Stack.Screen 
+            name="Main" 
+            component={TabNavigator}
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="Home" 
+            component={HomeScreen}
+            options={{ headerShown: false }} 
+          />
+          <Stack.Screen 
+            name="My Bids" 
+            component={MyBidsScreen}
+            options={{
+              headerLeft: () => (
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                  <Ionicons name="arrow-back-outline" size={24} color="black" />
+                </TouchableOpacity>
+              ),
+            }} 
+          />
+          <Stack.Screen 
+            name="My Products" 
+            component={MyProductsScreen}
+            options={{
+              headerLeft: () => (
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                  <Ionicons name="arrow-back-outline" size={24} color="black" />
+                </TouchableOpacity>
+              ),
+            }} 
+          />
+          <Stack.Screen 
+            name="Bids On My Products" 
+            component={BidsOnMyProductsScreen}
+            options={{
+              headerLeft: () => (
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                  <Ionicons name="arrow-back-outline" size={24} color="black" />
+                </TouchableOpacity>
+              ),
+            }} 
+          />
+          <Stack.Screen 
+            name="Profile" 
+            component={ProfileScreen}
+            options={{
+              headerLeft: () => (
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                  <Ionicons name="arrow-back-outline" size={24} color="black" />
+                </TouchableOpacity>
+              ),
+            }} 
+          />
+        </>
       )}
     </Stack.Navigator>
   );

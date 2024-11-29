@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
 // Make sure to register your app and get these credentials from Google Cloud Console
 const GOOGLE_CLIENT_ID = "817455873090-n59323uc9ffbd5vm92h3es0kbtbbg84g.apps.googleusercontent.com";
@@ -18,6 +18,7 @@ export default function Login() {
     email: '',
     password: '',
   });
+  const [isSignup, setIsSignup] = useState(false);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '817455873090-vj8qgftod0msnuo65l7v0d4pp2fiia3c.apps.googleusercontent.com',
@@ -58,6 +59,16 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
       if (userCredential.user) {
+        if (!userCredential.user.emailVerified) {
+          // Send verification email
+          await sendEmailVerification(userCredential.user, {
+            url: 'https://selahattinbabadag.com',
+            handleCodeInApp: true,
+          });
+
+          Alert.alert('Email Verification', 'A verification email has been sent to your email address. Please verify before logging in.');
+          return;
+        }
         await AsyncStorage.setItem('email', email);
         await AsyncStorage.setItem('password', password);
         router.replace('/(tabs)');
@@ -81,6 +92,45 @@ export default function Login() {
       }
       
       Alert.alert('Login Failed', errorMessage);
+      return; // Ensure the function exits here on failure
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!credentials.email || !credentials.password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const auth = getAuth();
+      const userCredential = await createUserWithEmailAndPassword(auth, credentials.email, credentials.password);
+
+      // Send email verification
+      await sendEmailVerification(userCredential.user);
+
+      Alert.alert(
+        'Signup Successful',
+        'A verification email has been sent to your email address. Please verify before logging in.'
+      );
+
+      // Clear fields after successful signup
+      setCredentials({ email: '', password: '' });
+      setIsSignup(false);
+    } catch (error: any) {
+      let errorMessage = 'An error occurred during signup';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Email is already in use. Please use a different email.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Please use a stronger password.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address. Please check and try again.';
+      }
+
+      Alert.alert('Signup Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -98,8 +148,8 @@ export default function Login() {
     <View style={styles.container}>
       <View style={styles.contentContainer}>
         <View style={styles.headerContainer}>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subtitleText}>Sign in to continue</Text>
+          <Text style={styles.welcomeText}>{isSignup ? 'Create Account' : 'Welcome Back'}</Text>
+          <Text style={styles.subtitleText}>{isSignup ? 'Sign up to get started' : 'Sign in to continue'}</Text>
         </View>
 
         <View style={styles.formContainer}>
@@ -133,20 +183,22 @@ export default function Login() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
+          {!isSignup && (
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity 
             style={[
               styles.loginButton,
               isLoading && { opacity: 0.7 }
             ]} 
-            onPress={() => handleLogin()}
+            onPress={isSignup ? handleSignup : () => handleLogin()}
             disabled={isLoading}
           >
             <Text style={styles.loginButtonText}>
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? (isSignup ? 'Signing Up...' : 'Signing In...') : (isSignup ? 'Sign Up' : 'Sign In')}
             </Text>
           </TouchableOpacity>
 
@@ -168,9 +220,11 @@ export default function Login() {
           </TouchableOpacity>
 
           <View style={styles.signupContainer}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
-              <Text style={styles.signupLink}>Sign Up</Text>
+            <Text style={styles.signupText}>
+              {isSignup ? 'Already have an account? ' : "Don't have an account? "}
+            </Text>
+            <TouchableOpacity onPress={() => setIsSignup(!isSignup)}>
+              <Text style={styles.signupLink}>{isSignup ? 'Sign In' : 'Sign Up'}</Text>
             </TouchableOpacity>
           </View>
         </View>

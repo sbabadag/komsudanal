@@ -14,7 +14,7 @@ import {
   TextInput,
   AppState,
 } from 'react-native';
-import { getDatabase, ref, onValue, push, set, get, remove } from 'firebase/database';
+import { getDatabase, ref, onValue, push, set, get, remove, update } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -438,6 +438,35 @@ export default function ProductsScreen() {
     product.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
+    const db = getDatabase();
+    const bidRef = ref(db, `bids/${bidId}`);
+    const bidsSnapshot = await get(bidRef.parent!);
+    const bids: { [key: string]: Bid } = bidsSnapshot.val() || {};
+    const bid = Object.values(bids).find(b => b.id === bidId);
+    if (!bid) {
+      console.error('Bid not found', bidId);
+      Alert.alert('Error', 'Bid not found.');
+      return;
+    }
+  
+    const targetProduct = products.find(product => product.id === bid.targetProductId);
+    if (!targetProduct) {
+      console.error('Target product not found for bid', bid.targetProductId);
+      Alert.alert('Error', 'Target product not found.');
+      return;
+    }
+  
+    try {
+      await update(bidRef, { status, notification: `Your bid has been ${status}.` });
+      Alert.alert('Success', `Bid has been ${status}.`);
+      await updateUnansweredBidsCount(); // Recalculate unanswered bids count
+    } catch (error) {
+      console.error(`Error updating bid status to ${status}:`, error);
+      Alert.alert('Error', `There was an error updating the bid status. Please try again.`);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -730,3 +759,22 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 });
+const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
+
+const updateUnansweredBidsCount = async () => {
+  const db = getDatabase();
+  const bidsRef = ref(db, 'bids');
+  
+  onValue(bidsRef, (snapshot) => {
+    const bids: { [key: string]: Bid } = snapshot.val() || {};
+    let pendingBidsCount = 0;
+    
+    Object.values(bids).forEach((bid: Bid) => {
+      if (bid.status === 'pending') {
+        pendingBidsCount++;
+      }
+    });
+    
+    setUnresultedBidsCount(pendingBidsCount);
+  });
+};
