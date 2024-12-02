@@ -3,6 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { Alert, ScrollView, Text, TextInput, StyleSheet, TouchableOpacity, View, Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
+import { FontAwesome6 } from '@expo/vector-icons'; // Add this import
 
 interface UserProfile {
   fullName: string;
@@ -10,6 +11,7 @@ interface UserProfile {
   address: string;
   photoUrl?: string;
   nickname?: string; // Add nickname field
+  coins?: number; // Add coins field
 }
 
 export default function ProfileScreen() {
@@ -20,6 +22,7 @@ export default function ProfileScreen() {
     address: '',
     photoUrl: '',
     nickname: '', // Initialize nickname
+    coins: 10, // Initialize coins with startup value
   });
 
   // Load existing profile data
@@ -99,6 +102,30 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleBuyCoins = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const userProfileRef = ref(db, `users/${user.uid}/profile`);
+
+    try {
+      await set(userProfileRef, {
+        ...profile,
+        coins: (profile.coins || 0) + 10, // Add 10 coins
+      });
+      setProfile(prev => ({
+        ...prev,
+        coins: (prev.coins || 0) + 10, // Update local state
+      }));
+      Alert.alert('Success', 'You have bought 10 coins.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to buy coins');
+      console.error('Buy coins error:', error);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.profileSection}>
@@ -169,6 +196,20 @@ export default function ProfileScreen() {
           <Text style={styles.saveButtonText}>
             {isLoading ? 'Saving...' : 'Save Profile'}
           </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.coinsSection}>
+        <View style={styles.coinsContainer}>
+          <Text style={styles.coinsText}>Coins: {profile.coins}</Text>
+          <FontAwesome6 name="coins" size={16} color="#FFD700" />
+        </View>
+
+        <TouchableOpacity 
+          style={styles.buyCoinsButton}
+          onPress={handleBuyCoins}
+        >
+          <Text style={styles.buyCoinsButtonText}>Buy 10 Coins</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -257,5 +298,38 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  coinsSection: {
+    padding: 16,
+    backgroundColor: 'white',
+    margin: 16,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+  },
+  coinsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  coinsText: {
+    fontSize: 16,
+    color: '#888',
+    marginRight: 8,
+  },
+  buyCoinsButton: {
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buyCoinsButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

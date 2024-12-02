@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  FlatList,
   Dimensions,
   Platform,
   TextInput,
@@ -17,10 +16,10 @@ import {
 import { getDatabase, ref, onValue, push, set, get, remove } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import Modal from 'react-native-modal';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import { Checkbox } from 'react-native-paper';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome6,FontAwesome5  } from '@expo/vector-icons';
 
 // Define the Product type
 interface Product {
@@ -33,6 +32,7 @@ interface Product {
   userId: string;
   status: 'draft' | 'published';
   createdAt: number;
+  category: string; // Add category property
 }
 
 interface Bid {
@@ -79,6 +79,15 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
     return () => unsubscribe();
   }, []);
 
+  const handleProductSelect = (productId: string) => {
+    setSelectedProducts(prev => {
+      const updatedSelectedProducts = prev.includes(productId)
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId];
+      return updatedSelectedProducts;
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -98,14 +107,7 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
               styles.card,
               selectedProducts.includes(product.id) && styles.selectedProduct
             ]}
-            onPress={() => {
-              setSelectedProducts(prev => {
-                const updatedSelectedProducts = prev.includes(product.id)
-                  ? prev.filter(id => id !== product.id)
-                  : [...prev, product.id];
-                return updatedSelectedProducts;
-              });
-            }}
+            onPress={() => handleProductSelect(product.id)}
           >
             <Image
               source={{ uri: product.images[0] }}
@@ -113,20 +115,13 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
             />
             <View style={styles.cardContent}>
               <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
+              <Text style={styles.productPrice}>{product.priceStart} TL - {product.priceEnd} TL</Text>
               <Text style={styles.productStatus}>Status: {product.status}</Text>
               <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
               <View style={styles.checkboxContainer}>
                 <Checkbox
                   status={selectedProducts.includes(product.id) ? 'checked' : 'unchecked'}
-                  onPress={() => {
-                    setSelectedProducts(prev => {
-                      const updatedSelectedProducts = prev.includes(product.id)
-                        ? prev.filter(id => id !== product.id)
-                        : [...prev, product.id];
-                      return updatedSelectedProducts;
-                    });
-                  }}
+                  onPress={() => handleProductSelect(product.id)}
                 />
               </View>
             </View>
@@ -137,7 +132,15 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
   );
 };
 
-export default function ProductsScreen() {
+const categories = [
+  { name: 'Electronics', icon: 'tv' },
+  { name: 'Furniture', icon: 'couch' },
+  { name: 'Clothing', icon: 'tshirt' },
+  { name: 'Books', icon: 'book' },
+  { name: 'Toys', icon: 'puzzle-piece' },
+]; // Define categories list with icons
+
+const ProductsScreen = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -149,6 +152,16 @@ export default function ProductsScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  const handleCategorySelect = (category: string) => {
+    setSelectedCategories(prev => {
+      const updatedSelectedCategories = prev.includes(category)
+        ? prev.filter(cat => cat !== category)
+        : [...prev, category];
+      return updatedSelectedCategories;
+    });
+  };
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -253,12 +266,12 @@ export default function ProductsScreen() {
   useEffect(() => {
     const db = getDatabase();
     const bidsRef = ref(db, 'bids');
-    
-    const unsubscribe = onValue(bidsRef, (snapshot) => {
+
+    const updateUnresultedBidsCount = (snapshot: any) => {
       const bids = snapshot.val() || {};
       const counts: { [key: string]: number } = {};
       let unresultedBidsCount = 0;
-      
+  
       Object.values(bids).forEach((bid: any) => {
         if (counts[bid.targetProductId]) {
           counts[bid.targetProductId]++;
@@ -269,39 +282,23 @@ export default function ProductsScreen() {
           unresultedBidsCount++;
         }
       });
-      
+  
       setBidCounts(counts);
       setUnresultedBidsCount(unresultedBidsCount);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
+    };
+  
+    const unsubscribe = onValue(bidsRef, updateUnresultedBidsCount);
+  
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active') {
-        // Refresh the counter when the app becomes active
-        const db = getDatabase();
-        const bidsRef = ref(db, 'bids');
-        
-        onValue(bidsRef, (snapshot) => {
-          const bids: { [key: string]: Bid } = snapshot.val() || {};
-          let unresultedBidsCount = 0;
-          
-          Object.values(bids).forEach((bid: Bid) => {
-            if (bid.status === 'pending') {
-              unresultedBidsCount++;
-            }
-          });
-          
-          setUnresultedBidsCount(unresultedBidsCount);
-        });
+        onValue(bidsRef, updateUnresultedBidsCount);
       }
     };
-
+  
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-
+  
     return () => {
+      unsubscribe();
       subscription.remove();
     };
   }, []);
@@ -433,9 +430,15 @@ export default function ProductsScreen() {
     return () => unsubscribe();
   }, []);
 
+  const calculateCoins = (priceStart: number, priceEnd: number) => {
+    const averagePrice = (priceStart + priceEnd) / 2;
+    return Math.floor(averagePrice / 100);
+  };
+
   const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.description.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    (selectedCategories.length === 0 || selectedCategories.includes(product.category))
   );
 
   if (loading) {
@@ -456,65 +459,86 @@ export default function ProductsScreen() {
           onChangeText={setSearchTerm}
         />
       </View>
+      <View style={styles.categoriesContainer}>
+        {categories.map(category => (
+          <TouchableOpacity key={category.name} style={styles.categoryItem} onPress={() => handleCategorySelect(category.name)}>
+            <FontAwesome
+              name={selectedCategories.includes(category.name) ? 'check-square' : 'square-o'}
+              size={24}
+              color="black"
+            />
+            <FontAwesome6 name={category.icon as any} size={24} color="black" style={styles.categoryIcon} />
+            <Text style={styles.categoryText}>{category.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <ScrollView style={styles.container}>
         <View style={styles.cardsWrapper}>
-          {filteredProducts.map((product) => (
-            <TouchableOpacity
-              key={product.id}
-              style={[
-                styles.card,
-                selectedProducts.includes(product.id) && styles.selectedProduct
-              ]}
-              onPress={() => {
-                setTargetProductId(product.id);
-                setModalVisible(true);
-              }}
-            >
+          {filteredProducts.length > 0 ? (
+            filteredProducts.map((product) => (
               <TouchableOpacity
-                style={styles.likeButton}
-                onPress={() => handleLikeProduct(product.id)}
+                key={product.id}
+                style={[
+                  styles.card,
+                  selectedProducts.includes(product.id) && styles.selectedProduct
+                ]}
+                onPress={() => {
+                  setTargetProductId(product.id);
+                  setModalVisible(true);
+                }}
               >
-                <FontAwesome
-                  name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
-                  size={24}
-                  color="red"
-                />
-              </TouchableOpacity>
-              <Image
-                source={{ uri: product.images[0] }}
-                style={styles.cardImage}
-              />
-              <View style={styles.cardContent}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productDescription}>{product.description}</Text>
-                <Text style={styles.productPrice}>${product.priceStart} - ${product.priceEnd}</Text>
-                <Text style={styles.productCreatedAt}>
-                  Created: {new Date(product.createdAt).toLocaleDateString()}
-                </Text>
-                <Text style={styles.bidCount}>
-                  Bids: {bidCounts[product.id] || 0}
-                </Text>
-                <View style={styles.ownerInfo}>
-                  <Image
-                    source={{ uri: ownerPhotos[product.userId]?.photoUrl || 'https://placeholder.com/user' }}
-                    style={styles.ownerPhoto}
-                  />
-                  <Text style={styles.ownerNickname}>
-                    {ownerPhotos[product.userId]?.nickname || 'NoName'}
-                  </Text>
-                </View>
                 <TouchableOpacity
-                  style={[styles.bidButton, { marginTop: 8 }]}
-                  onPress={() => {
-                    setTargetProductId(product.id);
-                    setModalVisible(true);
-                  }}
+                  style={styles.likeButton}
+                  onPress={() => handleLikeProduct(product.id)}
                 >
-                  <Text style={styles.buttonText}>Place Bid</Text>
+                  <FontAwesome
+                    name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                    size={24}
+                    color="red"
+                  />
                 </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
+                <Image
+                  source={{ uri: product.images[0] }}
+                  style={styles.cardImage}
+                />
+                <View style={styles.cardContent}>
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <Text style={styles.productDescription}>{product.description}</Text>
+                  <Text style={styles.productPrice}>{product.priceStart} TL - {product.priceEnd} TL</Text>
+                  <View style={styles.coinContainer}>
+                    <Text style={styles.productCoins}>Coins to bid: {calculateCoins(product.priceStart, product.priceEnd)}</Text>
+                    <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                  </View>
+                  <Text style={styles.productCreatedAt}>
+                    Created: {new Date(product.createdAt).toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.bidCount}>
+                    Bids: {bidCounts[product.id] || 0}
+                  </Text>
+                  <View style={styles.ownerInfo}>
+                    <Image
+                      source={{ uri: ownerPhotos[product.userId]?.photoUrl || 'https://placeholder.com/user' }}
+                      style={styles.ownerPhoto}
+                    />
+                    <Text style={styles.ownerNickname}>
+                      {ownerPhotos[product.userId]?.nickname || 'NoName'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.bidButton, { marginTop: 8 }]}
+                    onPress={() => {
+                      setTargetProductId(product.id);
+                      setModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Place Bid</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Text style={styles.noProductsText}>No products available in this category</Text>
+          )}
         </View>
       </ScrollView>
       <Modal
@@ -729,4 +753,42 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1,
   },
+  coinContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  productCoins: {
+    fontSize: 14,
+    color: '#888',
+    marginRight: 4,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    backgroundColor: 'white',
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 8,
+  },
+  categoryIcon: {
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  categoryText: {
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  noProductsText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginTop: 32,
+  },
 });
+
+export default ProductsScreen;

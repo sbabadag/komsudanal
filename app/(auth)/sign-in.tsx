@@ -136,7 +136,7 @@ export default function Login() {
           <TouchableOpacity style={styles.forgotPassword}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
-
+          <View style={styles.container}>
           <TouchableOpacity 
             style={[
               styles.loginButton,
@@ -149,13 +149,14 @@ export default function Login() {
               {isLoading ? 'Signing In...' : 'Sign In'}
             </Text>
           </TouchableOpacity>
+          </View>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OR</Text>
             <View style={styles.dividerLine} />
           </View>
-
+          <View style={styles.container}>
           <TouchableOpacity 
             style={styles.googleButton}
             onPress={handleGoogleLogin}
@@ -166,6 +167,7 @@ export default function Login() {
             />
             <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
+          </View>
 
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>

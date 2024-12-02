@@ -103,11 +103,6 @@ function TabNavigator() {
       <View style={styles.logoContainer}>
         <TouchableOpacity onPress={toggleDrawer}>
           <Image source={require('../assets/images/logo.png')} style={styles.logo} />
-          {unresultedBidsCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unresultedBidsCount}</Text>
-            </View>
-          )}
         </TouchableOpacity>
       </View>
       {userProfile && (
@@ -120,15 +115,31 @@ function TabNavigator() {
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, size }) => {
             let iconName;
+            let badgeCount = 0;
             switch (route.name) {
               case 'Home': iconName = 'home-outline'; break;
-              case 'My Bids': iconName = 'list-outline'; break;
+              case 'My Bids': 
+                iconName = 'list-outline'; 
+                badgeCount = unresultedBidsCount; // Set badge count for My Bids
+                break;
               case 'My Products': iconName = 'cube-outline'; break;
-              case 'Bids On My Products': iconName = 'clipboard-outline'; break;
+              case 'Bids On My Products': 
+                iconName = 'clipboard-outline'; 
+                badgeCount = unresultedBidsCount; // Set badge count for Bids On My Products
+                break;
               case 'Profile': iconName = 'person-outline'; break; // Add icon for Profile
               default: iconName = 'ellipse-outline';
             }
-            return <Ionicons name={iconName} size={size} color={color} />;
+            return (
+              <View>
+                <Ionicons name={iconName} size={size} color={color} />
+                {badgeCount > 0 && (
+                  <View style={styles.tabBadge}>
+                    <Text style={styles.tabBadgeText}>{badgeCount}</Text>
+                  </View>
+                )}
+              </View>
+            );
           },
           tabBarActiveTintColor: '#007AFF',
           tabBarInactiveTintColor: 'gray',
@@ -176,6 +187,11 @@ function TabNavigator() {
         <TouchableOpacity style={styles.drawerItem} onPress={() => navigateToScreen('Bids On My Products')}>
           <Ionicons name="clipboard-outline" size={24} color="black" />
           <Text style={styles.drawerItemText}>Bids On My Products</Text>
+          {unresultedBidsCount > 0 && (
+            <View style={styles.drawerBadge}>
+              <Text style={styles.drawerBadgeText}>{unresultedBidsCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity style={styles.drawerItem} onPress={() => navigateToScreen('Profile')}>
           <Ionicons name="person-outline" size={24} color="black" />
@@ -196,7 +212,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 40,
+    width: 125,
     height: 40,
   },
   badge: {
@@ -252,6 +268,38 @@ const styles = StyleSheet.create({
   drawerItemText: {
     fontSize: 18,
     marginLeft: 10,
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  drawerBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  drawerBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 

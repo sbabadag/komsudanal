@@ -13,6 +13,8 @@ import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, onValue, remove, set } from 'firebase/database';
 import { useRouter } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { FontAwesome6 } from '@expo/vector-icons'; // Add this import
 
 interface Bid {
   id: string;
@@ -130,6 +132,11 @@ export default function MyBidsScreen() {
     }
   };
 
+  const calculateCoins = (priceStart: number, priceEnd: number) => {
+    const averagePrice = (priceStart + priceEnd) / 2;
+    return Math.floor(averagePrice / 100);
+  };
+
   const renderBidStatus = (status: string) => {
     const statusStyles: { [key: string]: any } = {
       pending: { container: styles.statusPending, text: styles.statusPendingText },
@@ -192,8 +199,12 @@ export default function MyBidsScreen() {
                   {targetProduct.name}
                 </Text>
                 <Text style={styles.priceText}>
-                  ${targetProduct.priceStart} - ${targetProduct.priceEnd}
+                  {targetProduct.priceStart} TL - {targetProduct.priceEnd} TL
                 </Text>
+                <View style={styles.coinContainer}>
+                  <Text style={styles.productCoins}>Coins to bid: {calculateCoins(targetProduct.priceStart, targetProduct.priceEnd)}</Text>
+                  <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                </View>
               </View>
             </View>
 
@@ -353,6 +364,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 8,
   },
+  productCoins: {
+    fontSize: 14,
+    color: '#888',
+    marginRight: 4,
+  },
   productDescription: {
     fontSize: 14,
     color: '#888',
@@ -466,5 +482,10 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     zIndex: 1,
+  },
+  coinContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
 });

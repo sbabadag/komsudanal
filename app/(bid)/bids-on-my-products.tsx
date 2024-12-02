@@ -15,6 +15,8 @@ import { getDatabase, ref, onValue, update, remove, set } from 'firebase/databas
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { FontAwesome } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons'; // Add this import
 
 interface Bid {
   id: string;
@@ -39,6 +41,11 @@ interface Product {
 
 const screenWidth = Dimensions.get('window').width;
 const cardWidth = screenWidth - 40; // Adjust card width to fit the screen with some padding
+
+const calculateCoins = (priceStart: number, priceEnd: number) => {
+  const averagePrice = (priceStart + priceEnd) / 2;
+  return Math.floor(averagePrice / 100);
+};
 
 export default function BidsOnMyProductsScreen() {
   const [bids, setBids] = useState<Bid[]>([]);
@@ -208,8 +215,12 @@ export default function BidsOnMyProductsScreen() {
                         <Text style={styles.productName}>{product.name}</Text>
                         <Text style={styles.productDescription}>{product.description}</Text>
                         <Text style={styles.productPrice}>
-                          ${product.priceStart} - ${product.priceEnd}
+                          {product.priceStart} TL - {product.priceEnd} TL
                         </Text>
+                        <View style={styles.coinContainer}>
+                          <Text style={styles.productCoins}>Coins to bid: {calculateCoins(product.priceStart, product.priceEnd)}</Text>
+                          <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -315,6 +326,16 @@ const styles = StyleSheet.create({
   productPrice: {
     fontSize: 14,
     color: '#888',
+  },
+  productCoins: {
+    fontSize: 14,
+    color: '#888',
+    marginRight: 4,
+  },
+  coinContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
   },
   bidInfo: {
     marginTop: 10,

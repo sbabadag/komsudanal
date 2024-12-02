@@ -15,6 +15,8 @@ import { getDatabase, ref, push, set, onValue, remove } from 'firebase/database'
 import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from 'firebase/auth';
 import { FontAwesome } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker'; // Add this import
+import { Checkbox } from 'react-native-paper'; // Add this import
 
 interface Product {
   id: string;
@@ -26,7 +28,10 @@ interface Product {
   userId: string;
   status: 'draft' | 'published';
   createdAt: number;
+  categories: string[]; // Change category to categories array
 }
+
+const categories = ['Electronics', 'Furniture', 'Clothing', 'Books', 'Toys']; // Define categories list
 
 export default function MyProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -40,6 +45,7 @@ export default function MyProductsScreen() {
     priceStart: 0,
     priceEnd: 0,
     status: 'published' as 'draft' | 'published',
+    categories: [] as string[], // Initialize categories as an empty array
   });
   const [isEditing, setIsEditing] = useState(false);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
@@ -112,6 +118,15 @@ export default function MyProductsScreen() {
     }
   };
 
+  const handleCategorySelect = (category: string) => {
+    setNewProduct(prev => {
+      const updatedCategories = prev.categories.includes(category)
+        ? prev.categories.filter(cat => cat !== category)
+        : [...prev.categories, category];
+      return { ...prev, categories: updatedCategories };
+    });
+  };
+
   const handlePublish = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -164,6 +179,7 @@ export default function MyProductsScreen() {
         priceStart: 0,
         priceEnd: 0,
         status: 'published',
+        categories: [], // Reset categories to an empty array
       });
       Alert.alert('Success', 'Product published successfully');
     } catch (error) {
@@ -183,6 +199,7 @@ export default function MyProductsScreen() {
       priceStart: product.priceStart,
       priceEnd: product.priceEnd,
       status: product.status,
+      categories: product.categories,
     });
     setIsEditing(true);
   };
@@ -237,6 +254,7 @@ export default function MyProductsScreen() {
         priceStart: 0,
         priceEnd: 0,
         status: 'published',
+        categories: [], // Reset categories to an empty array
       });
       setEditingProduct(null);
       setIsEditing(false);
@@ -258,6 +276,7 @@ export default function MyProductsScreen() {
       priceStart: 0,
       priceEnd: 0,
       status: 'published',
+      categories: [], // Reset categories to an empty array
     });
     setIsEditing(false);
   };
@@ -357,6 +376,17 @@ export default function MyProductsScreen() {
           value={newProduct.priceEnd.toString()}
           onChangeText={(text) => setNewProduct((prev) => ({ ...prev, priceEnd: parseFloat(text) || 0 }))}
         />
+        <View style={styles.categoriesContainer}>
+          {categories.map(category => (
+            <TouchableOpacity key={category} style={styles.categoryItem} onPress={() => handleCategorySelect(category)}>
+              <Checkbox
+                status={newProduct.categories.includes(category) ? 'checked' : 'unchecked'}
+                onPress={() => handleCategorySelect(category)}
+              />
+              <Text style={styles.categoryText}>{category}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <TouchableOpacity style={styles.imagePicker} onPress={handleImagePick}>
           <Text style={styles.imagePickerText}>Pick an Image</Text>
         </TouchableOpacity>
@@ -598,5 +628,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 32,
+  },
+  picker: {
+    height: 50,
+    marginBottom: 16,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 8,
+  },
+  categoryText: {
+    fontSize: 16,
+    marginLeft: 8,
   },
 });
