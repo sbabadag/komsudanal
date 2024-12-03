@@ -20,10 +20,12 @@ const screenWidth = Dimensions.get('window').width;
 
 function TabNavigator() {
   const [userProfile, setUserProfile] = useState<{ photoUrl: string, fullName: string, nickname: string } | null>(null);
-  const [unresultedBidsCount, setUnresultedBidsCount] = useState(0); // Add state for unresulted bids count
-  const [drawerAnimation] = useState(new Animated.Value(-screenWidth)); // Initialize drawer animation value
+  const [pendingBidsCount, setPendingBidsCount] = useState(0);
+  const [resultedBidsCount, setResultedBidsCount] = useState(0);
+  const [pendingBidsOnMyProductsCount, setPendingBidsOnMyProductsCount] = useState(0);
+  const [drawerAnimation] = useState(new Animated.Value(-screenWidth));
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  
+
   const navigation = useNavigation<NavigationProp<any>>();
 
   useEffect(() => {
@@ -33,7 +35,7 @@ function TabNavigator() {
 
     const db = getDatabase();
     const userProfileRef = ref(db, `users/${user.uid}/profile`);
-    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`); // Reference for unresulted bids count
+    const bidsRef = ref(db, 'bids');
 
     const unsubscribeProfile = onValue(userProfileRef, (snapshot) => {
       const data = snapshot.val();
@@ -42,11 +44,28 @@ function TabNavigator() {
       }
     });
 
-    const unsubscribeBids = onValue(unresultedBidsRef, (snapshot) => {
-      const count = snapshot.val();
-      if (count !== null) {
-        setUnresultedBidsCount(count);
-      }
+    const unsubscribeBids = onValue(bidsRef, (snapshot) => {
+      const bidsData = snapshot.val() || {};
+      let pendingBids = 0;
+      let resultedBids = 0;
+      let pendingBidsOnMyProducts = 0;
+
+      Object.values(bidsData).forEach((bid: any) => {
+        if (bid.userId === user.uid) {
+          if (bid.status === 'pending') {
+            pendingBids++;
+          } else {
+            resultedBids++;
+          }
+        }
+        if (bid.targetProductOwnerId === user.uid && bid.status === 'pending') {
+          pendingBidsOnMyProducts++;
+        }
+      });
+
+      setPendingBidsCount(pendingBids);
+      setResultedBidsCount(resultedBids);
+      setPendingBidsOnMyProductsCount(pendingBidsOnMyProducts);
     });
 
     return () => {
@@ -120,12 +139,12 @@ function TabNavigator() {
               case 'Home': iconName = 'home-outline'; break;
               case 'My Bids': 
                 iconName = 'list-outline'; 
-                badgeCount = unresultedBidsCount; // Set badge count for My Bids
+                badgeCount = pendingBidsCount; // Set badge count for My Bids
                 break;
               case 'My Products': iconName = 'cube-outline'; break;
               case 'Bids On My Products': 
                 iconName = 'clipboard-outline'; 
-                badgeCount = unresultedBidsCount; // Set badge count for Bids On My Products
+                badgeCount = pendingBidsOnMyProductsCount; // Set badge count for BOM
                 break;
               case 'Profile': iconName = 'person-outline'; break; // Add icon for Profile
               default: iconName = 'ellipse-outline';
@@ -187,9 +206,9 @@ function TabNavigator() {
         <TouchableOpacity style={styles.drawerItem} onPress={() => navigateToScreen('Bids On My Products')}>
           <Ionicons name="clipboard-outline" size={24} color="black" />
           <Text style={styles.drawerItemText}>Bids On My Products</Text>
-          {unresultedBidsCount > 0 && (
+          {pendingBidsOnMyProductsCount > 0 && ( // Set badge count for BOM
             <View style={styles.drawerBadge}>
-              <Text style={styles.drawerBadgeText}>{unresultedBidsCount}</Text>
+              <Text style={styles.drawerBadgeText}>{pendingBidsOnMyProductsCount}</Text>
             </View>
           )}
         </TouchableOpacity>
