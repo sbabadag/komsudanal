@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "817455873090",
+    "firebase_url": "https://komsu-a0920-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "komsu-a0920",
+    "storage_bucket": "komsu-a0920.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:817455873090:android:0bd949c878f81a21ac41db",
+        "android_client_info": {
+          "package_name": "com.sbabadag.komsudanal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "817455873090-n59323uc9ffbd5vm92h3es0kbtbbg84g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCANzvfHdKhwBtFkthyDoJR-8x0WA-JGw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "817455873090-7321qin1jnaou6rmu4a6dfktprioirnr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sbabadag.komsudanal"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

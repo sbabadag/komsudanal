@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { getDatabase, ref, onValue, update, remove, set } from 'firebase/database';
+import { getDatabase, ref, onValue, update, remove, set, get } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
 import { FontAwesome } from '@expo/vector-icons';
@@ -101,9 +101,9 @@ export default function BidsOnMyProductsScreen() {
 
   useEffect(() => {
     const updateTabBadge = (count: number) => {
-      navigation.setOptions({
-        tabBarBadge: count > 0 ? count : null,
-      });
+    //  navigation.setOptions({
+    //    tabBarBadge: count > 0 ? count : null,
+   //   });
     };
 
     const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
@@ -130,6 +130,16 @@ export default function BidsOnMyProductsScreen() {
     try {
       await update(bidRef, { status, notification: `Your bid has been ${status}.` });
       Alert.alert('Success', `Bid has been ${status}.`);
+
+      // Send notification to the user who made the bid
+      const userTokenRef = ref(db, `expoPushTokens/${bid.userId}`);
+      const tokenSnapshot = await get(userTokenRef);
+      const expoPushToken = tokenSnapshot.val();
+
+      if (expoPushToken) {
+        await sendPushNotification(expoPushToken, `Your bid on ${targetProduct.name} has been ${status}.`);
+      }
+
       // Update the tab badge number after handling the bid response
       const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
       navigation.setOptions({
@@ -388,3 +398,34 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 });
+async function sendPushNotification(expoPushToken: string, message: string) {
+  const messageBody = {
+    to: expoPushToken,
+    sound: 'default',
+    title: 'Bid Update',
+    body: message,
+    data: { message },
+  };
+
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messageBody),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to send push notification');
+    }
+
+    const responseData = await response.json();
+    console.log('Push notification response:', responseData);
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+  }
+}
+
+// Removed duplicate function implementation

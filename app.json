@@ -14,13 +14,22 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sbabadag.komsudanal"
+      "bundleIdentifier": "com.sbabadag.komsudanal",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["com.googleusercontent.apps.817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl"]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png"
       },
-      "package": "com.sbabadag.komsudanal"
+      "package": "com.sbabadag.komsudanal",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",

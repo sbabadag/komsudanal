@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { getDatabase, ref, set } from 'firebase/database';
@@ -22,16 +21,16 @@ const registerForPushNotificationsAsync = async () => {
       return;
     }
     token = (await Notifications.getExpoPushTokenAsync()).data;
-    console.log(token);
+    console.log('Expo Push Token:', token);
   } else {
     alert('Must use physical device for Push Notifications');
   }
 
   if (token) {
+    const db = getDatabase();
     const auth = getAuth();
     const user = auth.currentUser;
     if (user) {
-      const db = getDatabase();
       const tokenRef = ref(db, `expoPushTokens/${user.uid}`);
       await set(tokenRef, token);
     }
@@ -50,8 +49,29 @@ const registerForPushNotificationsAsync = async () => {
 };
 
 export default function App() {
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  interface Notification {
+    request: {
+      content: {
+        title: string | null;
+        subtitle: string | null;
+        body: string | null;
+        data: Record<string, any>;
+        sound: "default" | "defaultCritical" | "custom" | null;
+      };
+    };
+  }
+
+  const handleNotification = (notification: Notification) => {
+    setNotificationCount(prevCount => prevCount + 1);
+  };
+
   useEffect(() => {
     registerForPushNotificationsAsync();
+    const subscription = Notifications.addNotificationReceivedListener(handleNotification);
+    return () => subscription.remove();
+    // ...existing code...
   }, []);
 
   // ...existing code...

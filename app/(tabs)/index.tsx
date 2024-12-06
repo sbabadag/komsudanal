@@ -311,15 +311,26 @@ const ProductsScreen = () => {
       body: message,
       data: { message },
     };
-
-    await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(messageBody),
-    });
+  
+    try {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messageBody),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to send push notification');
+      }
+  
+      const responseData = await response.json();
+      console.log('Push notification response:', responseData);
+    } catch (error) {
+      console.error('Error sending push notification:', error);
+    }
   };
 
   const handleBidSubmit = async () => {
@@ -331,14 +342,14 @@ const ProductsScreen = () => {
       Alert.alert('Error', 'Please select a product to bid on and offer at least one product.');
       return;
     }
-
+  
     const targetProduct = products.find(product => product.id === targetProductId);
     if (!targetProduct) {
       console.error('Target product not found for bid', targetProductId);
       Alert.alert('Error', 'Target product not found.');
       return;
     }
-
+  
     const offeredProductsExist = selectedProducts.every(productId =>
       userProducts.some(product => product.id === productId)
     );
@@ -347,11 +358,11 @@ const ProductsScreen = () => {
       Alert.alert('Error', 'One or more offered products not found.');
       return;
     }
-
+  
     const db = getDatabase();
     const bidsRef = ref(db, 'bids');
     const newBidRef = push(bidsRef);
-
+  
     const newBid: Bid = {
       id: newBidRef.key!,
       targetProductId,
@@ -361,7 +372,7 @@ const ProductsScreen = () => {
       userId: user.uid,
       targetProductOwnerId: targetProduct.userId, // Add target product owner ID
     };
-
+  
     try {
       await set(newBidRef, newBid);
       // Send notification to the target product owner
@@ -372,16 +383,16 @@ const ProductsScreen = () => {
         createdAt: Date.now(),
         read: false,
       });
-
+  
       // Fetch the target user's Expo push token
       const userTokenRef = ref(db, `expoPushTokens/${targetProduct.userId}`);
       const tokenSnapshot = await get(userTokenRef);
       const expoPushToken = tokenSnapshot.val();
-
+  
       if (expoPushToken) {
         await sendPushNotification(expoPushToken, `You have received a new bid on your product: ${targetProduct.name}`);
       }
-
+  
       Alert.alert('Success', 'Your bid has been submitted.');
       setSelectedProducts([]);
       setTargetProductId(null);
