@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,15 +12,25 @@ import {
   Platform,
   TextInput,
   AppState,
-} from 'react-native';
-import { getDatabase, ref, onValue, push, set, get, remove } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
-import Modal from 'react-native-modal';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-import { Checkbox } from 'react-native-paper';
-import { FontAwesome, FontAwesome6,FontAwesome5  } from '@expo/vector-icons';
-import SelectCategoriesScreen from '../SelectCategoriesScreen';
+} from "react-native";
+import {
+  getDatabase,
+  ref,
+  onValue,
+  push,
+  set,
+  get,
+  remove,
+} from "firebase/database";
+import { getAuth } from "firebase/auth";
+import Modal from "react-native-modal";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
+import { Checkbox } from "react-native-paper";
+import { FontAwesome, FontAwesome6, FontAwesome5 } from "@expo/vector-icons";
+import SelectCategoriesScreen from "../SelectCategoriesScreen";
+import Icon from "react-native-vector-icons/FontAwesome"; // Add this import
+import ImagePicker from "expo-image-picker"; // Import ImagePicker if used
 
 // Define the Product type
 interface Product {
@@ -31,28 +41,34 @@ interface Product {
   priceStart: number;
   priceEnd: number;
   userId: string;
-  status: 'draft' | 'published';
+  status: "draft" | "published";
   createdAt: number;
-  category: string; // Add category property
+  categories: string[]; // Use categories as an array
 }
 
 interface Bid {
   id: string;
   targetProductId: string;
   offeredProducts: string[];
-  status: 'pending' | 'accepted' | 'rejected';
+  status: "pending" | "accepted" | "rejected";
   createdAt: number;
   userId: string;
   targetProductOwnerId: string; // Add target product owner ID
 }
 
-const screenWidth = Dimensions.get('window').width;
+const screenWidth = Dimensions.get("window").width;
 const cardWidth = Platform.select({
-  web: '13%', // 7 cards per row on web
-  default: '48%', // 2 cards per row on other platforms
+  web: "13%", // 7 cards per row on web
+  default: "48%", // 2 cards per row on other platforms
 });
 
-const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedProducts: string[], setSelectedProducts: React.Dispatch<React.SetStateAction<string[]>> }) => {
+const MyProductsScreen = ({
+  selectedProducts,
+  setSelectedProducts,
+}: {
+  selectedProducts: string[];
+  setSelectedProducts: React.Dispatch<React.SetStateAction<string[]>>;
+}) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,27 +79,35 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
 
     const db = getDatabase();
     const productsRef = ref(db, `products/${user.uid}`);
-    
-    const unsubscribe = onValue(productsRef, (snapshot) => {
-      const productsData = snapshot.val() || {};
-      const productsArray = Object.entries(productsData).map(([id, data]: [string, any]) => ({
-        id,
-        ...data,
-      }));
-      setProducts(productsArray);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching products:', error);
-      setLoading(false);
-    });
+
+    const unsubscribe = onValue(
+      productsRef,
+      (snapshot) => {
+        const productsData = snapshot.val() || {};
+        const productsArray = Object.entries(productsData).map(
+          ([id, data]: [string, any]) => ({
+            id,
+            ...data,
+            categories: Array.isArray(data.categories) ? data.categories : [], // Ensure categories is an array
+            images: Array.isArray(data.images) ? data.images : [], // Ensure images is an array
+          })
+        );
+        setProducts(productsArray);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching products:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []);
 
   const handleProductSelect = (productId: string) => {
-    setSelectedProducts(prev => {
+    setSelectedProducts((prev) => {
       const updatedSelectedProducts = prev.includes(productId)
-        ? prev.filter(id => id !== productId)
+        ? prev.filter((id) => id !== productId)
         : [...prev, productId];
       return updatedSelectedProducts;
     });
@@ -106,7 +130,7 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
             key={product.id}
             style={[
               styles.card,
-              selectedProducts.includes(product.id) && styles.selectedProduct
+              selectedProducts.includes(product.id) && styles.selectedProduct,
             ]}
             onPress={() => handleProductSelect(product.id)}
           >
@@ -117,19 +141,29 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
               />
             ) : (
               <Image
-                source={{ uri: 'https://placeholder.com/placeholder.png' }} // Add a placeholder image URL
+                source={{ uri: "https://placeholder.com/placeholder.png" }} // Add a placeholder image URL
                 style={styles.cardImage}
               />
             )}
             <View style={styles.cardContent}>
               <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productPrice}>{product.priceStart} TL - {product.priceEnd} TL</Text>
+              <Text style={styles.productPrice}>
+                {product.priceStart} TL - {product.priceEnd} TL
+              </Text>
               <Text style={styles.productStatus}>Status: {product.status}</Text>
-              <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
-              <Text style={styles.productCategory}>Category: {product.category}</Text>
+              <Text style={styles.productCreatedAt}>
+                Created At: {new Date(product.createdAt).toLocaleDateString()}
+              </Text>
+              <Text style={styles.productCategory}>
+                Category: {product.categories.join(", ")}
+              </Text>
               <View style={styles.checkboxContainer}>
                 <Checkbox
-                  status={selectedProducts.includes(product.id) ? 'checked' : 'unchecked'}
+                  status={
+                    selectedProducts.includes(product.id)
+                      ? "checked"
+                      : "unchecked"
+                  }
                   onPress={() => handleProductSelect(product.id)}
                 />
               </View>
@@ -148,65 +182,79 @@ const ProductsScreen = () => {
   const [targetProductId, setTargetProductId] = useState<string | null>(null);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [isModalVisible, setModalVisible] = useState(false);
-  const [ownerPhotos, setOwnerPhotos] = useState<{ [key: string]: { photoUrl: string, nickname: string } }>({});
+  const [ownerPhotos, setOwnerPhotos] = useState<{
+    [key: string]: { photoUrl: string; nickname: string };
+  }>({});
   const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+
+  // Define the category to icon mapping (reuse from SelectCategoriesScreen.tsx)
+  const categoryIcons: { [key: string]: string } = {
+    Electronics: "tv",
+    Furniture: "home",
+    Clothing: "tshirt",
+    // ...other categories...
+  };
 
   // Remove the inline handleCategorySelect and categories array
 
   // Fetch all products except user's own
   useEffect(() => {
     const db = getDatabase();
-    const productsRef = ref(db, 'products');
+    const productsRef = ref(db, "products");
     const auth = getAuth();
     const user = auth.currentUser;
 
-    console.log('Current user:', user?.uid);
+    console.log("Current user:", user?.uid);
 
-    const unsubscribe = onValue(productsRef, (snapshot) => {
-      setLoading(true);
-      const data = snapshot.val();
-      if (!data) {
-        setProducts([]);
-        setLoading(false);
-        return;
-      }
-
-      const allProducts: Product[] = [];
-
-      // Iterate through each user's products
-      Object.keys(data).forEach((userId) => {
-        const userProducts = data[userId];
-
-        if (userProducts && typeof userProducts === 'object') {
-          Object.keys(userProducts).forEach((productId) => {
-            const product = userProducts[productId];
-
-            // Only include if:
-            // 1. Product exists
-            // 2. Not current user's product
-            if (product && (!user || userId !== user.uid)) {
-              allProducts.push({
-                ...product,
-                id: productId,
-                userId: userId
-              });
-            }
-          });
+    const unsubscribe = onValue(
+      productsRef,
+      (snapshot) => {
+        setLoading(true);
+        const data = snapshot.val();
+        if (!data) {
+          setProducts([]);
+          setLoading(false);
+          return;
         }
-      });
 
-      console.log('Filtered products:', allProducts);
-      setProducts(allProducts);
-      setLoading(false);
-    }, (error) => {
-      console.error('Database error:', error);
-      setLoading(false);
-    });
+        const allProducts: Product[] = [];
+
+        // Iterate through each user's products
+        Object.keys(data).forEach((userId) => {
+          const userProducts = data[userId];
+
+          if (userProducts && typeof userProducts === "object") {
+            Object.keys(userProducts).forEach((productId) => {
+              const product = userProducts[productId];
+
+              // Only include if:
+              // 1. Product exists
+              // 2. Not current user's product
+              if (product && (!user || userId !== user.uid)) {
+                allProducts.push({
+                  ...product,
+                  id: productId,
+                  userId: userId,
+                });
+              }
+            });
+          }
+        });
+
+        console.log("Filtered products:", allProducts);
+        setProducts(allProducts);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Database error:", error);
+        setLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, []); // Empty dependency array to run only once
@@ -237,14 +285,20 @@ const ProductsScreen = () => {
 
   useEffect(() => {
     const db = getDatabase();
-    const usersRef = ref(db, 'users');
+    const usersRef = ref(db, "users");
 
     const unsubscribe = onValue(usersRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const photos: { [key: string]: { photoUrl: string, nickname: string } } = {};
+        const photos: {
+          [key: string]: { photoUrl: string; nickname: string };
+        } = {};
         Object.keys(data).forEach((userId) => {
-          if (data[userId].profile && data[userId].profile.photoUrl && data[userId].profile.nickname) {
+          if (
+            data[userId].profile &&
+            data[userId].profile.photoUrl &&
+            data[userId].profile.nickname
+          ) {
             photos[userId] = {
               photoUrl: data[userId].profile.photoUrl,
               nickname: data[userId].profile.nickname,
@@ -260,114 +314,125 @@ const ProductsScreen = () => {
 
   useEffect(() => {
     const db = getDatabase();
-    const bidsRef = ref(db, 'bids');
+    const bidsRef = ref(db, "bids");
 
     const updateUnresultedBidsCount = (snapshot: any) => {
       const bids = snapshot.val() || {};
       const counts: { [key: string]: number } = {};
       let unresultedBidsCount = 0;
-  
+
       Object.values(bids).forEach((bid: any) => {
         if (counts[bid.targetProductId]) {
           counts[bid.targetProductId]++;
         } else {
           counts[bid.targetProductId] = 1;
         }
-        if (bid.status === 'pending') {
+        if (bid.status === "pending") {
           unresultedBidsCount++;
         }
       });
-  
+
       setBidCounts(counts);
       setUnresultedBidsCount(unresultedBidsCount);
     };
-  
+
     const unsubscribe = onValue(bidsRef, updateUnresultedBidsCount);
-  
+
     const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === 'active') {
+      if (nextAppState === "active") {
         onValue(bidsRef, updateUnresultedBidsCount);
       }
     };
-  
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-  
+
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
     return () => {
       unsubscribe();
       subscription.remove();
     };
   }, []);
 
-  const sendPushNotification = async (expoPushToken: string, message: string) => {
+  const sendPushNotification = async (
+    expoPushToken: string,
+    message: string
+  ) => {
     const messageBody = {
       to: expoPushToken,
-      sound: 'default',
-      title: 'New Bid Received',
+      sound: "default",
+      title: "New Bid Received",
       body: message,
       data: { message },
     };
-  
+
     try {
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
         headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
+          Accept: "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(messageBody),
       });
-  
+
       if (!response.ok) {
-        throw new Error('Failed to send push notification');
+        throw new Error("Failed to send push notification");
       }
-  
+
       const responseData = await response.json();
-      console.log('Push notification response:', responseData);
+      console.log("Push notification response:", responseData);
     } catch (error) {
-      console.error('Error sending push notification:', error);
+      console.error("Error sending push notification:", error);
     }
   };
 
   const handleBidSubmit = async () => {
     const auth = getAuth();
     const user = auth.currentUser;
-    console.log('Selected products:', selectedProducts);
-    console.log('Target product ID:', targetProductId);
+    console.log("Selected products:", selectedProducts);
+    console.log("Target product ID:", targetProductId);
     if (!user || !targetProductId || selectedProducts.length === 0) {
-      Alert.alert('Error', 'Please select a product to bid on and offer at least one product.');
+      Alert.alert(
+        "Error",
+        "Please select a product to bid on and offer at least one product."
+      );
       return;
     }
-  
-    const targetProduct = products.find(product => product.id === targetProductId);
+
+    const targetProduct = products.find(
+      (product) => product.id === targetProductId
+    );
     if (!targetProduct) {
-      console.error('Target product not found for bid', targetProductId);
-      Alert.alert('Error', 'Target product not found.');
+      console.error("Target product not found for bid", targetProductId);
+      Alert.alert("Error", "Target product not found.");
       return;
     }
-  
-    const offeredProductsExist = selectedProducts.every(productId =>
-      userProducts.some(product => product.id === productId)
+
+    const offeredProductsExist = selectedProducts.every((productId) =>
+      userProducts.some((product) => product.id === productId)
     );
     if (!offeredProductsExist) {
-      console.error('One or more offered products not found', selectedProducts);
-      Alert.alert('Error', 'One or more offered products not found.');
+      console.error("One or more offered products not found", selectedProducts);
+      Alert.alert("Error", "One or more offered products not found.");
       return;
     }
-  
+
     const db = getDatabase();
-    const bidsRef = ref(db, 'bids');
+    const bidsRef = ref(db, "bids");
     const newBidRef = push(bidsRef);
-  
+
     const newBid: Bid = {
       id: newBidRef.key!,
       targetProductId,
       offeredProducts: selectedProducts,
-      status: 'pending',
+      status: "pending",
       createdAt: Date.now(),
       userId: user.uid,
       targetProductOwnerId: targetProduct.userId, // Add target product owner ID
     };
-  
+
     try {
       await set(newBidRef, newBid);
       // Send notification to the target product owner
@@ -378,23 +443,29 @@ const ProductsScreen = () => {
         createdAt: Date.now(),
         read: false,
       });
-  
+
       // Fetch the target user's Expo push token
       const userTokenRef = ref(db, `expoPushTokens/${targetProduct.userId}`);
       const tokenSnapshot = await get(userTokenRef);
       const expoPushToken = tokenSnapshot.val();
-  
+
       if (expoPushToken) {
-        await sendPushNotification(expoPushToken, `You have received a new bid on your product: ${targetProduct.name}`);
+        await sendPushNotification(
+          expoPushToken,
+          `You have received a new bid on your product: ${targetProduct.name}`
+        );
       }
-  
-      Alert.alert('Success', 'Your bid has been submitted.');
+
+      Alert.alert("Success", "Your bid has been submitted.");
       setSelectedProducts([]);
       setTargetProductId(null);
       setModalVisible(false);
     } catch (error) {
-      console.error('Error submitting bid:', error);
-      Alert.alert('Error', 'There was an error submitting your bid. Please try again.');
+      console.error("Error submitting bid:", error);
+      Alert.alert(
+        "Error",
+        "There was an error submitting your bid. Please try again."
+      );
     }
   };
 
@@ -415,8 +486,8 @@ const ProductsScreen = () => {
         setLikedProducts((prev) => [...prev, productId]);
       }
     } catch (error) {
-      console.error('Error updating likes:', error);
-      Alert.alert('Error', 'Failed to update likes');
+      console.error("Error updating likes:", error);
+      Alert.alert("Error", "Failed to update likes");
     }
   };
 
@@ -441,13 +512,42 @@ const ProductsScreen = () => {
     return Math.floor(averagePrice / 100);
   };
 
-  const filteredProducts = products.filter(product => 
-    (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (selectedCategories.length === 0 || 
-    !product.category || 
-    selectedCategories.some(category => product.category?.includes(category)))
-  );
+  // Update the handleCategorySelect to manage 'Any' selection
+  const handleCategorySelect = (selectedCategories: string[]) => {
+    if (selectedCategories.includes("Any")) {
+      setSelectedCategories(["Any"]);
+    } else {
+      setSelectedCategories(selectedCategories);
+    }
+    setCategoryModalVisible(false);
+  };
+
+  // Add a console log to debug 'products' and 'selectedCategories'
+  useEffect(() => {
+    console.log("Products:", products);
+    console.log("Selected Categories:", selectedCategories);
+  }, [products, selectedCategories]);
+
+  // Ensure 'filteredProducts' is always an array
+  const filteredProducts = Array.isArray(products)
+    ? products.filter((product) => {
+        if (selectedCategories.includes("Any")) {
+          return true; // Disable filtering
+        }
+        const matchesSearchTerm =
+          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.description.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesCategory =
+          selectedCategories.length === 0 ||
+          (Array.isArray(product.categories) &&
+            product.categories.some((category) =>
+              selectedCategories.includes(category)
+            ));
+
+        return matchesSearchTerm && matchesCategory;
+      })
+    : [];
 
   if (loading) {
     return (
@@ -457,6 +557,7 @@ const ProductsScreen = () => {
     );
   }
 
+  // Update the rendering to handle empty or undefined 'filteredProducts'
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.searchContainer}>
@@ -467,8 +568,12 @@ const ProductsScreen = () => {
           onChangeText={setSearchTerm}
         />
         <TouchableOpacity
-          style={styles.selectCategoriesButton}
+          style={[
+            styles.selectCategoriesButton,
+            selectedCategories.includes("Any") && styles.disabledButton,
+          ]}
           onPress={() => setCategoryModalVisible(true)}
+          disabled={selectedCategories.includes("Any")}
         >
           <Text style={styles.buttonText}>Select Categories</Text>
         </TouchableOpacity>
@@ -479,13 +584,14 @@ const ProductsScreen = () => {
 
       <ScrollView style={styles.container}>
         <View style={styles.cardsWrapper}>
-          {filteredProducts.length > 0 ? (
+          {Array.isArray(filteredProducts) && filteredProducts.length > 0 ? (
             filteredProducts.map((product) => (
               <TouchableOpacity
                 key={product.id}
                 style={[
                   styles.card,
-                  selectedProducts.includes(product.id) && styles.selectedProduct
+                  selectedProducts.includes(product.id) &&
+                    styles.selectedProduct,
                 ]}
                 onPress={() => {
                   setTargetProductId(product.id);
@@ -497,28 +603,37 @@ const ProductsScreen = () => {
                   onPress={() => handleLikeProduct(product.id)}
                 >
                   <FontAwesome
-                    name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
+                    name={
+                      likedProducts.includes(product.id) ? "heart" : "heart-o"
+                    }
                     size={24}
                     color="red"
                   />
                 </TouchableOpacity>
-                {product.images && product.images.length > 0 ? (
+                {Array.isArray(product.images) && product.images.length > 0 ? (
                   <Image
                     source={{ uri: product.images[0] }}
                     style={styles.cardImage}
                   />
                 ) : (
                   <Image
-                    source={{ uri: 'https://placeholder.com/placeholder.png' }} // Add a placeholder image URL
+                    source={{ uri: "https://placeholder.com/placeholder.png" }} // Add a placeholder image URL
                     style={styles.cardImage}
                   />
                 )}
                 <View style={styles.cardContent}>
                   <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productDescription}>{product.description}</Text>
-                  <Text style={styles.productPrice}>{product.priceStart} TL - {product.priceEnd} TL</Text>
+                  <Text style={styles.productDescription}>
+                    {product.description}
+                  </Text>
+                  <Text style={styles.productPrice}>
+                    {product.priceStart} TL - {product.priceEnd} TL
+                  </Text>
                   <View style={styles.coinContainer}>
-                    <Text style={styles.productCoins}>Coins to bid: {calculateCoins(product.priceStart, product.priceEnd)}</Text>
+                    <Text style={styles.productCoins}>
+                      Coins to bid:{" "}
+                      {calculateCoins(product.priceStart, product.priceEnd)}
+                    </Text>
                     <FontAwesome6 name="coins" size={16} color="#FFD700" />
                   </View>
                   <Text style={styles.productCreatedAt}>
@@ -529,12 +644,29 @@ const ProductsScreen = () => {
                   </Text>
                   <View style={styles.ownerInfo}>
                     <Image
-                      source={{ uri: ownerPhotos[product.userId]?.photoUrl || 'https://placeholder.com/user' }}
+                      source={{
+                        uri:
+                          ownerPhotos[product.userId]?.photoUrl ||
+                          "https://placeholder.com/user",
+                      }}
                       style={styles.ownerPhoto}
                     />
                     <Text style={styles.ownerNickname}>
-                      {ownerPhotos[product.userId]?.nickname || 'NoName'}
+                      {ownerPhotos[product.userId]?.nickname || "NoName"}
                     </Text>
+                  </View>
+                  <View style={styles.productCategories}>
+                    {Array.isArray(product.categories) &&
+                      product.categories.map((category) => (
+                        <View key={category} style={styles.categoryIcon}>
+                          <Icon
+                            name={categoryIcons[category] || "circle"}
+                            size={16}
+                            color="#555"
+                          />
+                          <Text style={styles.categoryText}>{category}</Text>
+                        </View>
+                      ))}
                   </View>
                   <TouchableOpacity
                     style={[styles.bidButton, { marginTop: 8 }]}
@@ -549,7 +681,9 @@ const ProductsScreen = () => {
               </TouchableOpacity>
             ))
           ) : (
-            <Text style={styles.noProductsText}>No products available in this category</Text>
+            <Text style={styles.noProductsText}>
+              No products available in this category
+            </Text>
           )}
         </View>
       </ScrollView>
@@ -563,10 +697,8 @@ const ProductsScreen = () => {
         <View style={styles.modalContent}>
           <SelectCategoriesScreen
             selectedCategories={selectedCategories}
-            onClose={(selected) => {
-              setSelectedCategories(selected);
-              setCategoryModalVisible(false);
-            }}
+            onSelectCategories={handleCategorySelect} // Updated prop name
+            onClose={() => setCategoryModalVisible(false)} // Add onClose prop
           />
         </View>
       </Modal>
@@ -582,12 +714,12 @@ const ProductsScreen = () => {
         animationOut="slideOutDown"
       >
         <View style={styles.modalContent}>
-          <MyProductsScreen selectedProducts={selectedProducts} setSelectedProducts={setSelectedProducts} />
+          <MyProductsScreen
+            selectedProducts={selectedProducts}
+            setSelectedProducts={setSelectedProducts}
+          />
           <View style={styles.buttons}>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={handleBidSubmit}
-            >
+            <TouchableOpacity style={styles.button} onPress={handleBidSubmit}>
               <Text style={styles.buttonText}>Submit Bid</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -600,71 +732,70 @@ const ProductsScreen = () => {
         </View>
       </Modal>
       {/* Remove the logo container */}
-
-    </View> 
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
     padding: 16,
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 16,
   },
   cardsWrapper: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between', // Adjust to space between cards
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between", // Adjust to space between cards
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     width: Platform.select({
-      web: '13%', // 7 cards per row on web
-      default: '48%', // 2 cards per row on other platforms
+      web: "13%", // 7 cards per row on web
+      default: "48%", // 2 cards per row on other platforms
     }),
     marginBottom: 16,
-    marginHorizontal: '0.5%',
+    marginHorizontal: "0.5%",
   },
   productImage: {
-    width: '100%',
+    width: "100%",
     height: 140,
     marginBottom: 10, // Add gap between image and name text
   },
   productInfo: {
-    alignItems: 'center', // Center elements horizontally inside the product info
-    justifyContent: 'center', // Center elements vertically
+    alignItems: "center", // Center elements horizontally inside the product info
+    justifyContent: "center", // Center elements vertically
   },
   productName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4, // Decrease gap between name and price text
   },
   productPrice: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 10,
   },
   ownerInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start', // Align items to the top
-    justifyContent: 'flex-start', // Align items to the left
+    flexDirection: "row",
+    alignItems: "flex-start", // Align items to the top
+    justifyContent: "flex-start", // Align items to the left
     marginBottom: 10,
     marginTop: 24, // Adjust margin to move it downwards
   },
@@ -676,52 +807,52 @@ const styles = StyleSheet.create({
   },
   ownerNickname: {
     fontSize: 16,
-    color: '#007AFF',
+    color: "#007AFF",
   },
   bidButton: {
     padding: 10,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 5,
   },
   buttonText: {
-    color: 'white',
-    fontWeight: '600',
+    color: "white",
+    fontWeight: "600",
   },
   modal: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     margin: 0,
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     padding: 20,
     borderRadius: 10,
   },
   buttons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 20,
   },
   button: {
     padding: 10,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 5,
   },
   cancelButton: {
     padding: 10,
-    backgroundColor: '#FF6347',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#FF6347",
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 5,
   },
   drawerContainer: {
     maxHeight: 400, // Adjust the height to fit the drawer
   },
   selectedProduct: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: "#e0e0e0",
   },
   cardContent: {
     padding: 12,
@@ -730,17 +861,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cardImage: {
-    width: '100%',
+    width: "100%",
     height: 160,
   },
   productStatus: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
     marginTop: 4,
   },
   productCreatedAt: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
     marginTop: 4,
   },
   productDescription: {
@@ -749,68 +880,105 @@ const styles = StyleSheet.create({
   },
   bidCount: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 4,
   },
   searchContainer: {
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   searchInput: {
     height: 40,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   badge: {
-    position: 'absolute',
+    position: "absolute",
     top: -5,
     right: -5,
-    backgroundColor: 'red',
+    backgroundColor: "red",
     borderRadius: 10,
     padding: 5,
   },
   badgeText: {
-    color: 'white',
+    color: "white",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   likeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     right: 10,
     zIndex: 1,
   },
   coinContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 4,
   },
   productCoins: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
     marginRight: 4,
   },
   selectCategoriesButton: {
     padding: 10,
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 10,
   },
   noProductsText: {
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginTop: 32,
+  },
+  disabledButton: {
+    backgroundColor: "#d3d3d3",
   },
   productCategory: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     marginTop: 4,
+  },
+  productCategories: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  categoryIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: "#555",
+    marginLeft: 4,
   },
 });
 
 export default ProductsScreen;
+
+const handleImagePick = async () => {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [4, 3],
+    quality: 1,
+  });
+
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const uri = result.assets[0].uri;
+    if (uri) {
+      // Handle the image URI here
+      // For example, upload the image or set it to state
+      // setNewProduct((prev) => ({ ...prev, images: [...prev.images, uri] }));
+    }
+  }
+};
