@@ -17,6 +17,8 @@ import { getAuth } from 'firebase/auth';
 import { FontAwesome } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker'; // Add this import
 import { Checkbox } from 'react-native-paper'; // Add this import
+import SelectCategoriesScreen from '../SelectCategoriesScreen'; // Add this import
+import Modal from 'react-native-modal'; // Add this import
 
 interface Product {
   id: string;
@@ -49,6 +51,7 @@ export default function MyProductsScreen() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
+  const [isCategoryModalVisible, setCategoryModalVisible] = useState(false); // Add this state
 
   useEffect(() => {
     const auth = getAuth();
@@ -118,13 +121,12 @@ export default function MyProductsScreen() {
     }
   };
 
-  const handleCategorySelect = (category: string) => {
-    setNewProduct(prev => {
-      const updatedCategories = prev.categories.includes(category)
-        ? prev.categories.filter(cat => cat !== category)
-        : [...prev.categories, category];
-      return { ...prev, categories: updatedCategories };
-    });
+  const handleCategorySelect = (selectedCategories: string[]) => {
+    setNewProduct(prev => ({
+      ...prev,
+      categories: selectedCategories, // Update categories array
+    }));
+    setCategoryModalVisible(false);
   };
 
   const handlePublish = async () => {
@@ -164,6 +166,7 @@ export default function MyProductsScreen() {
         userId: user.uid,
         status: 'published', // Make sure status is set
         createdAt: Date.now(),
+        categories: newProduct.categories, // Ensure categories are saved
       });
 
       console.log('Published product:', {
@@ -239,6 +242,7 @@ export default function MyProductsScreen() {
         id: editingProduct.id,
         userId: user.uid,
         createdAt: editingProduct.createdAt,
+        categories: newProduct.categories, // Ensure categories are updated
       });
 
       console.log('Updated product:', {
@@ -376,17 +380,15 @@ export default function MyProductsScreen() {
           value={newProduct.priceEnd.toString()}
           onChangeText={(text) => setNewProduct((prev) => ({ ...prev, priceEnd: parseFloat(text) || 0 }))}
         />
-        <View style={styles.categoriesContainer}>
-          {categories.map(category => (
-            <TouchableOpacity key={category} style={styles.categoryItem} onPress={() => handleCategorySelect(category)}>
-              <Checkbox
-                status={newProduct.categories.includes(category) ? 'checked' : 'unchecked'}
-                onPress={() => handleCategorySelect(category)}
-              />
-              <Text style={styles.categoryText}>{category}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <TouchableOpacity
+          style={styles.selectCategoriesButton}
+          onPress={() => setCategoryModalVisible(true)}
+        >
+          <Text style={styles.buttonText}>Select Categories</Text>
+        </TouchableOpacity>
+        <Text style={styles.selectedCategoryText}>
+          Selected Categories: {newProduct.categories.join(', ') || 'None'}
+        </Text>
         <TouchableOpacity style={styles.imagePicker} onPress={handleImagePick}>
           <Text style={styles.imagePickerText}>Pick an Image</Text>
         </TouchableOpacity>
@@ -456,6 +458,7 @@ export default function MyProductsScreen() {
                   <Text style={styles.productPrice}>
                     ${product.priceStart.toLocaleString()} - ${product.priceEnd.toLocaleString()}
                   </Text>
+                  <Text style={styles.productCategory}>Categories: {product.categories?.join(', ') || 'None'}</Text>
                   <TouchableOpacity
                     style={styles.editButton}
                     onPress={() => handleEditProduct(product)}
@@ -476,6 +479,19 @@ export default function MyProductsScreen() {
           <Text style={styles.noProductsText}>No products available</Text>
         )}
       </View>
+
+      <Modal
+        isVisible={isCategoryModalVisible}
+        onBackdropPress={() => setCategoryModalVisible(false)}
+        style={styles.modal}
+      >
+        <View style={styles.modalContent}>
+          <SelectCategoriesScreen
+            selectedCategories={newProduct.categories}
+            onClose={handleCategorySelect}
+          />
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -647,5 +663,31 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 16,
     marginLeft: 8,
+  },
+  selectCategoriesButton: {
+    padding: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  selectedCategoryText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  productCategory: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 4,
+  },
+  modal: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
   },
 });

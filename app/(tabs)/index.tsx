@@ -20,6 +20,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import { Checkbox } from 'react-native-paper';
 import { FontAwesome, FontAwesome6,FontAwesome5  } from '@expo/vector-icons';
+import SelectCategoriesScreen from '../SelectCategoriesScreen';
 
 // Define the Product type
 interface Product {
@@ -109,15 +110,23 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
             ]}
             onPress={() => handleProductSelect(product.id)}
           >
-            <Image
-              source={{ uri: product.images[0] }}
-              style={styles.cardImage}
-            />
+            {product.images && product.images.length > 0 ? (
+              <Image
+                source={{ uri: product.images[0] }}
+                style={styles.cardImage}
+              />
+            ) : (
+              <Image
+                source={{ uri: 'https://placeholder.com/placeholder.png' }} // Add a placeholder image URL
+                style={styles.cardImage}
+              />
+            )}
             <View style={styles.cardContent}>
               <Text style={styles.productName}>{product.name}</Text>
               <Text style={styles.productPrice}>{product.priceStart} TL - {product.priceEnd} TL</Text>
               <Text style={styles.productStatus}>Status: {product.status}</Text>
               <Text style={styles.productCreatedAt}>Created At: {new Date(product.createdAt).toLocaleDateString()}</Text>
+              <Text style={styles.productCategory}>Category: {product.category}</Text>
               <View style={styles.checkboxContainer}>
                 <Checkbox
                   status={selectedProducts.includes(product.id) ? 'checked' : 'unchecked'}
@@ -132,14 +141,6 @@ const MyProductsScreen = ({ selectedProducts, setSelectedProducts }: { selectedP
   );
 };
 
-const categories = [
-  { name: 'Electronics', icon: 'tv' },
-  { name: 'Furniture', icon: 'couch' },
-  { name: 'Clothing', icon: 'tshirt' },
-  { name: 'Books', icon: 'book' },
-  { name: 'Toys', icon: 'puzzle-piece' },
-]; // Define categories list with icons
-
 const ProductsScreen = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,15 +154,9 @@ const ProductsScreen = () => {
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
 
-  const handleCategorySelect = (category: string) => {
-    setSelectedCategories(prev => {
-      const updatedSelectedCategories = prev.includes(category)
-        ? prev.filter(cat => cat !== category)
-        : [...prev, category];
-      return updatedSelectedCategories;
-    });
-  };
+  // Remove the inline handleCategorySelect and categories array
 
   // Fetch all products except user's own
   useEffect(() => {
@@ -449,7 +444,9 @@ const ProductsScreen = () => {
   const filteredProducts = products.filter(product => 
     (product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.description.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (selectedCategories.length === 0 || selectedCategories.includes(product.category))
+    (selectedCategories.length === 0 || 
+    !product.category || 
+    selectedCategories.some(category => product.category?.includes(category)))
   );
 
   if (loading) {
@@ -469,20 +466,17 @@ const ProductsScreen = () => {
           value={searchTerm}
           onChangeText={setSearchTerm}
         />
+        <TouchableOpacity
+          style={styles.selectCategoriesButton}
+          onPress={() => setCategoryModalVisible(true)}
+        >
+          <Text style={styles.buttonText}>Select Categories</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.categoriesContainer}>
-        {categories.map(category => (
-          <TouchableOpacity key={category.name} style={styles.categoryItem} onPress={() => handleCategorySelect(category.name)}>
-            <FontAwesome
-              name={selectedCategories.includes(category.name) ? 'check-square' : 'square-o'}
-              size={24}
-              color="black"
-            />
-            <FontAwesome6 name={category.icon as any} size={24} color="black" style={styles.categoryIcon} />
-            <Text style={styles.categoryText}>{category.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+
+      {/* Remove the inline categories selection */}
+      {/* ...existing code... */}
+
       <ScrollView style={styles.container}>
         <View style={styles.cardsWrapper}>
           {filteredProducts.length > 0 ? (
@@ -508,10 +502,17 @@ const ProductsScreen = () => {
                     color="red"
                   />
                 </TouchableOpacity>
-                <Image
-                  source={{ uri: product.images[0] }}
-                  style={styles.cardImage}
-                />
+                {product.images && product.images.length > 0 ? (
+                  <Image
+                    source={{ uri: product.images[0] }}
+                    style={styles.cardImage}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: 'https://placeholder.com/placeholder.png' }} // Add a placeholder image URL
+                    style={styles.cardImage}
+                  />
+                )}
                 <View style={styles.cardContent}>
                   <Text style={styles.productName}>{product.name}</Text>
                   <Text style={styles.productDescription}>{product.description}</Text>
@@ -552,6 +553,24 @@ const ProductsScreen = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Add Modal for category selection */}
+      <Modal
+        isVisible={isCategoryModalVisible}
+        onBackdropPress={() => setCategoryModalVisible(false)}
+        style={styles.modal}
+      >
+        <View style={styles.modalContent}>
+          <SelectCategoriesScreen
+            selectedCategories={selectedCategories}
+            onClose={(selected) => {
+              setSelectedCategories(selected);
+              setCategoryModalVisible(false);
+            }}
+          />
+        </View>
+      </Modal>
+
       <Modal
         isVisible={isModalVisible}
         onBackdropPress={() => {
@@ -774,31 +793,23 @@ const styles = StyleSheet.create({
     color: '#888',
     marginRight: 4,
   },
-  categoriesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    backgroundColor: 'white',
-  },
-  categoryItem: {
-    flexDirection: 'row',
+  selectCategoriesButton: {
+    padding: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
     alignItems: 'center',
-    marginRight: 16,
-    marginBottom: 8,
-  },
-  categoryIcon: {
-    marginLeft: 8,
-    marginRight: 8,
-  },
-  categoryText: {
-    fontSize: 16,
-    marginLeft: 8,
+    marginTop: 10,
   },
   noProductsText: {
     textAlign: 'center',
     fontSize: 16,
     color: '#666',
     marginTop: 32,
+  },
+  productCategory: {
+    fontSize: 14,
+    color: '#333',
+    marginTop: 4,
   },
 });
 
