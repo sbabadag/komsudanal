@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -31,6 +31,37 @@ import { FontAwesome, FontAwesome6, FontAwesome5 } from "@expo/vector-icons";
 import SelectCategoriesScreen from "../SelectCategoriesScreen";
 import Icon from "react-native-vector-icons/FontAwesome"; // Add this import
 import ImagePicker from "expo-image-picker"; // Import ImagePicker if used
+import ReviewsScreen from "./reviews"; // Import ReviewsScreen
+
+// Move categoryIcons definition to the top level, before any components
+const categoryIcons: { [key: string]: string } = {
+  Any: "th-large",
+  Electronics: "tv",
+  Furniture: "home",
+  Clothing: "tshirt",
+  Books: "book",
+  Toys: "puzzle-piece",
+  "Home Appliances": "blender",
+  Garden: "tree",
+  Sports: "futbol-o",
+  Beauty: "heartbeat",
+  Automotive: "car",
+  Health: "medkit",
+  Music: "music",
+  Movies: "film",
+  Games: "gamepad",
+  Jewelry: "diamond",
+  "Pet Supplies": "paw",
+  "Office Supplies": "pencil",
+  "Baby Products": "child",
+  Groceries: "shopping-cart",
+  Art: "paint-brush",
+  Tools: "wrench",
+  Software: "desktop",
+  Photography: "camera",
+  Wearables: "watch",
+  Accessories: "tags",
+};
 
 // Define the Product type
 interface Product {
@@ -56,18 +87,31 @@ interface Bid {
   targetProductOwnerId: string; // Add target product owner ID
 }
 
+// Define Review interface if not already defined
+interface Review {
+  id: string;
+  userId: string;
+  username: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
+}
+
 const screenWidth = Dimensions.get("window").width;
 const cardWidth = Platform.select({
   web: "13%", // 7 cards per row on web
   default: "48%", // 2 cards per row on other platforms
 });
 
-const MyProductsScreen = ({
-  selectedProducts,
-  setSelectedProducts,
-}: {
+interface MyProductsScreenProps {
   selectedProducts: string[];
   setSelectedProducts: React.Dispatch<React.SetStateAction<string[]>>;
+}
+
+// Define MyProductsScreen as a proper function component
+const MyProductsScreen: React.FC<MyProductsScreenProps> = ({
+  selectedProducts,
+  setSelectedProducts,
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +219,8 @@ const MyProductsScreen = ({
   );
 };
 
-const ProductsScreen = () => {
+const ProductsScreen: React.FC = () => {
+  // Move all hooks to the top level
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -186,23 +231,40 @@ const ProductsScreen = () => {
     [key: string]: { photoUrl: string; nickname: string };
   }>({});
   const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
-  const [searchTerm, setSearchTerm] = useState("");
+  const [reviews, setReviews] = useState<{ [key: string]: Review[] }>({});
+  const [newReview, setNewReview] = useState({
+    productId: "",
+    rating: 0,
+    comment: "",
+  });
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
 
-  // Define the category to icon mapping (reuse from SelectCategoriesScreen.tsx)
-  const categoryIcons: { [key: string]: string } = {
-    Electronics: "tv",
-    Furniture: "home",
-    Clothing: "tshirt",
-    // ...other categories...
-  };
+  // Define callbacks using useCallback
+  const updateUnresultedBidsCount = useCallback((snapshot: any) => {
+    const bids = snapshot.val() || {};
+    const counts: { [key: string]: number } = {};
+    let unresolvedCount = 0;
 
-  // Remove the inline handleCategorySelect and categories array
+    Object.values(bids).forEach((bid: any) => {
+      if (counts[bid.targetProductId]) {
+        counts[bid.targetProductId]++;
+      } else {
+        counts[bid.targetProductId] = 1;
+      }
+      if (bid.status === "pending") {
+        unresolvedCount++;
+      }
+    });
 
-  // Fetch all products except user's own
+    setBidCounts(counts);
+    setUnresultedBidsCount(unresolvedCount);
+  }, []);
+
+  // Move useEffects after all state definitions
   useEffect(() => {
     const db = getDatabase();
     const productsRef = ref(db, "products");
@@ -316,26 +378,6 @@ const ProductsScreen = () => {
     const db = getDatabase();
     const bidsRef = ref(db, "bids");
 
-    const updateUnresultedBidsCount = (snapshot: any) => {
-      const bids = snapshot.val() || {};
-      const counts: { [key: string]: number } = {};
-      let unresultedBidsCount = 0;
-
-      Object.values(bids).forEach((bid: any) => {
-        if (counts[bid.targetProductId]) {
-          counts[bid.targetProductId]++;
-        } else {
-          counts[bid.targetProductId] = 1;
-        }
-        if (bid.status === "pending") {
-          unresultedBidsCount++;
-        }
-      });
-
-      setBidCounts(counts);
-      setUnresultedBidsCount(unresultedBidsCount);
-    };
-
     const unsubscribe = onValue(bidsRef, updateUnresultedBidsCount);
 
     const handleAppStateChange = (nextAppState: string) => {
@@ -353,6 +395,19 @@ const ProductsScreen = () => {
       unsubscribe();
       subscription.remove();
     };
+  }, [updateUnresultedBidsCount]);
+
+  // Fetch reviews for products
+  useEffect(() => {
+    const db = getDatabase();
+    const reviewsRef = ref(db, "reviews");
+
+    const unsubscribe = onValue(reviewsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      setReviews(data);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const sendPushNotification = async (
@@ -549,6 +604,33 @@ const ProductsScreen = () => {
       })
     : [];
 
+  const handleSubmitReview = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !newReview.productId) return;
+
+    const db = getDatabase();
+    const reviewRef = push(ref(db, `reviews/${newReview.productId}`));
+
+    const review: Review = {
+      id: reviewRef.key!,
+      userId: user.uid,
+      username: user.displayName || "Anonymous",
+      rating: newReview.rating,
+      comment: newReview.comment,
+      createdAt: Date.now(),
+    };
+
+    try {
+      await set(reviewRef, review);
+      Alert.alert("Success", "Your review has been submitted.");
+      setNewReview({ productId: "", rating: 0, comment: "" });
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      Alert.alert("Error", "Failed to submit review.");
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -593,10 +675,7 @@ const ProductsScreen = () => {
                   selectedProducts.includes(product.id) &&
                     styles.selectedProduct,
                 ]}
-                onPress={() => {
-                  setTargetProductId(product.id);
-                  setModalVisible(true);
-                }}
+                // Removed onPress from the card
               >
                 <TouchableOpacity
                   style={styles.likeButton}
@@ -677,6 +756,123 @@ const ProductsScreen = () => {
                   >
                     <Text style={styles.buttonText}>Place Bid</Text>
                   </TouchableOpacity>
+
+                  {/* Reviews Section */}
+                  <View style={styles.reviewsContainer}>
+                    <Text style={styles.reviewsTitle}>Reviews:</Text>
+                    {Array.isArray(reviews[product.id]) &&
+                    reviews[product.id].length > 0 ? (
+                      reviews[product.id].map((review) => (
+                        <View key={review.id} style={styles.reviewItem}>
+                          <Text style={styles.reviewUsername}>
+                            {review.username}
+                          </Text>
+                          <View style={styles.reviewRating}>
+                            {Array.from({ length: 5 }, (_, index) => (
+                              <FontAwesome
+                                key={index}
+                                name={
+                                  index < review.rating ? "star" : "star-o"
+                                }
+                                size={16}
+                                color="#FFD700"
+                              />
+                            ))}
+                          </View>
+                          <Text style={styles.reviewComment}>
+                            {review.comment}
+                          </Text>
+                          <Text style={styles.reviewDate}>
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noReviewsText}>No reviews yet.</Text>
+                    )}
+                    {/* Add Review Form */}
+                    <View style={styles.addReviewContainer}>
+                      <View style={styles.starRatingContainer}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <TouchableOpacity
+                            key={star}
+                            onPress={() => {
+                              setNewReview((prev) =>
+                                prev.productId === product.id
+                                  ? { ...prev, rating: star }
+                                  : prev
+                              );
+                            }}
+                          >
+                            <FontAwesome
+                              name={
+                                star <= newReview.rating ? "star" : "star-o"
+                              }
+                              size={24}
+                              color="#FFD700"
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput
+                        style={styles.reviewInput}
+                        placeholder="Your Comment"
+                        value={
+                          newReview.productId === product.id
+                            ? newReview.comment
+                            : ""
+                        }
+                        onChangeText={(text) =>
+                          setNewReview((prev) =>
+                            prev.productId === product.id
+                              ? { ...prev, comment: text }
+                              : prev
+                          )
+                        }
+                      />
+                      <TouchableOpacity
+                        style={styles.submitReviewButton}
+                        onPress={() =>
+                          setNewReview((prev) => ({
+                            ...prev,
+                            productId: product.id,
+                          }))
+                        }
+                      >
+                        <Text style={styles.buttonText}>Add Review</Text>
+                      </TouchableOpacity>
+                      {newReview.productId === product.id && (
+                        <TouchableOpacity
+                          style={styles.submitReviewButton}
+                          onPress={handleSubmitReview}
+                        >
+                          <Text style={styles.buttonText}>Submit Review</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.reviewsContainer}>
+                    {reviews[product.id] && reviews[product.id].length > 0 ? (
+                      <View style={styles.stars}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <FontAwesome
+                            key={star}
+                            name={
+                              reviews[product.id][0].rating >= star
+                                ? "star"
+                                : "star-o"
+                            }
+                            size={16}
+                            color="#FFD700"
+                            // Make stars non-interactive
+                            // Remove onPress handlers
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                    )}
+                  </View>
                 </View>
               </TouchableOpacity>
             ))
@@ -736,6 +932,7 @@ const ProductsScreen = () => {
   );
 };
 
+// Fix the styles object by removing duplicate keys and correcting syntax
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -755,7 +952,7 @@ const styles = StyleSheet.create({
   cardsWrapper: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between", // Adjust to space between cards
+    justifyContent: "space-between",
   },
   card: {
     backgroundColor: "white",
@@ -767,37 +964,55 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     width: Platform.select({
-      web: "13%", // 7 cards per row on web
-      default: "48%", // 2 cards per row on other platforms
+      web: "13%",
+      default: "48%",
     }),
     marginBottom: 16,
     marginHorizontal: "0.5%",
   },
+  selectedProduct: {
+    borderColor: "#007AFF",
+    borderWidth: 2,
+  },
+  cardImage: {
+    width: "100%",
+    height: 140,
+    marginBottom: 10,
+  },
   productImage: {
     width: "100%",
     height: 140,
-    marginBottom: 10, // Add gap between image and name text
+    marginBottom: 10,
   },
   productInfo: {
-    alignItems: "center", // Center elements horizontally inside the product info
-    justifyContent: "center", // Center elements vertically
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardContent: {
+    padding: 10,
   },
   productName: {
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 4, // Decrease gap between name and price text
+    marginBottom: 4,
   },
   productPrice: {
     fontSize: 16,
     fontWeight: "600",
+    marginTop: 8,
     marginBottom: 10,
+  },
+  productDescription: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
   },
   ownerInfo: {
     flexDirection: "row",
-    alignItems: "flex-start", // Align items to the top
-    justifyContent: "flex-start", // Align items to the left
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
     marginBottom: 10,
-    marginTop: 24, // Adjust margin to move it downwards
+    marginTop: 24,
   },
   ownerPhoto: {
     width: 24,
@@ -819,117 +1034,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "white",
     fontWeight: "600",
-  },
-  modal: {
-    justifyContent: "flex-end",
-    margin: 0,
-  },
-  modalContent: {
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 10,
-  },
-  buttons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20,
-  },
-  button: {
-    padding: 10,
-    backgroundColor: "#007AFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 5,
-  },
-  cancelButton: {
-    padding: 10,
-    backgroundColor: "#FF6347",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 5,
-  },
-  drawerContainer: {
-    maxHeight: 400, // Adjust the height to fit the drawer
-  },
-  selectedProduct: {
-    backgroundColor: "#e0e0e0",
-  },
-  cardContent: {
-    padding: 12,
-  },
-  checkboxContainer: {
-    marginTop: 10,
-  },
-  cardImage: {
-    width: "100%",
-    height: 160,
-  },
-  productStatus: {
-    fontSize: 14,
-    color: "#888",
-    marginTop: 4,
-  },
-  productCreatedAt: {
-    fontSize: 14,
-    color: "#888",
-    marginTop: 4,
-  },
-  productDescription: {
     fontSize: 16,
-    marginBottom: 8,
-  },
-  bidCount: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  searchContainer: {
-    padding: 16,
-    backgroundColor: "white",
-  },
-  searchInput: {
-    height: 40,
-    borderColor: "#ddd",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#f5f5f5",
-  },
-  badge: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    backgroundColor: "red",
-    borderRadius: 10,
-    padding: 5,
-  },
-  badgeText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  likeButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    zIndex: 1,
-  },
-  coinContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  productCoins: {
-    fontSize: 14,
-    color: "#888",
-    marginRight: 4,
-  },
-  selectCategoriesButton: {
-    padding: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 10,
   },
   noProductsText: {
     textAlign: "center",
@@ -937,12 +1042,23 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 32,
   },
+  likeButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 1,
+  },
   disabledButton: {
     backgroundColor: "#d3d3d3",
   },
   productCategory: {
     fontSize: 14,
     color: "#333",
+    marginTop: 4,
+  },
+  productStatus: {
+    fontSize: 14,
+    color: "#888",
     marginTop: 4,
   },
   productCategories: {
@@ -961,24 +1077,154 @@ const styles = StyleSheet.create({
     color: "#555",
     marginLeft: 4,
   },
+  reviewsContainer: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#f9f9f9",
+    borderRadius: 8,
+  },
+  reviewsTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+  reviewItem: {
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+    paddingBottom: 5,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 4,
+  },
+  reviewUsername: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reviewRating: {
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  reviewComment: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
+  },
+  addReviewContainer: {
+    marginTop: 10,
+  },
+  reviewInput: {
+    height: 40,
+    borderColor: "#ddd",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    backgroundColor: "#fff",
+  },
+  submitReviewButton: {
+    backgroundColor: "#4CAF50",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 5,
+  },
+  coinContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  productCoins: {
+    fontSize: 14,
+    color: "#888",
+    marginRight: 4,
+  },
+  productCreatedAt: {
+    fontSize: 14,
+    color: "#888",
+    marginTop: 4,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: "#f5f5f5",
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  selectCategoriesButton: {
+    backgroundColor: "#007AFF",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+    flexDirection: "row",
+  },
+  modal: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+    width: "80%",
+  },
+  buttons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  bidCount: {
+    fontSize: 14,
+    color: "#888",
+    marginTop: 4,
+  },
+  button: {
+    padding: 10,
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 5,
+  },
+  cancelButton: {
+    padding: 10,
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 5,
+  },
+  drawerContainer: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: "#fff",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  stars: {
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  starRatingContainer: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
 });
 
 export default ProductsScreen;
 
-const handleImagePick = async () => {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [4, 3],
-    quality: 1,
-  });
-
-  if (!result.canceled && result.assets && result.assets.length > 0) {
-    const uri = result.assets[0].uri;
-    if (uri) {
-      // Handle the image URI here
-      // For example, upload the image or set it to state
-      // setNewProduct((prev) => ({ ...prev, images: [...prev.images, uri] }));
-    }
-  }
-};

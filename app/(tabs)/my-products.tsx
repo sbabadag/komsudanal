@@ -39,6 +39,17 @@ interface Product {
   status: "draft" | "published";
   createdAt: number;
   categories: string[]; // Ensure 'categories' is always an array
+  reviews: Review[]; // Add reviews array to store user reviews
+  averageRating?: number; // Add averageRating if needed
+}
+
+interface Review {
+  id: string;
+  userId: string;
+  username: string;
+  rating: number;
+  comment: string;
+  createdAt: number;
 }
 
 const categories = [
@@ -96,6 +107,8 @@ export default function MyProductsScreen() {
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false); // Add this state
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // Add this state
   const [searchTerm, setSearchTerm] = useState(""); // Add this state
+  const [reviews, setReviews] = useState<{ [key: string]: Review[] }>({}); // Add this state
+  const [averageRatings, setAverageRatings] = useState<{ [key: string]: number }>({}); // Add this state
 
   useEffect(() => {
     const auth = getAuth();
@@ -145,6 +158,22 @@ export default function MyProductsScreen() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const calculateAverageRatings = () => {
+      const avgRatings: { [key: string]: number } = {};
+      for (const productId in reviews) {
+        const productReviews = reviews[productId];
+        if (productReviews.length > 0) {
+          const total = productReviews.reduce((sum, review) => sum + review.rating, 0);
+          avgRatings[productId] = total / productReviews.length;
+        }
+      }
+      setAverageRatings(avgRatings);
+    };
+
+    calculateAverageRatings();
+  }, [reviews]);
 
   const handleImagePick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -612,6 +641,26 @@ export default function MyProductsScreen() {
                     <Text style={styles.productCategory}>
                       Categories: {product.categories?.join(", ") || "None"}
                     </Text>
+                    <View style={styles.ratingContainer}>
+                      {averageRatings[product.id] ? (
+                        <View style={styles.stars}>
+                          {Array.from({ length: 5 }, (_, index) => (
+                            <FontAwesome
+                              key={index}
+                              name={
+                                averageRatings[product.id] >= index + 1
+                                  ? "star"
+                                  : "star-o"
+                              }
+                              size={16}
+                              color="#FFD700"
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                      )}
+                    </View>
                     <TouchableOpacity
                       style={styles.editButton}
                       onPress={() => handleEditProduct(product)}
@@ -829,10 +878,6 @@ const styles = StyleSheet.create({
     marginRight: 16,
     marginBottom: 8,
   },
-  categoryText: {
-    fontSize: 16,
-    marginLeft: 8,
-  },
   selectCategoriesButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -878,5 +923,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginLeft: 4,
     fontSize: 14,
+  },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  stars: {
+    flexDirection: "row",
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
   },
 });

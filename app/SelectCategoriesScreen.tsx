@@ -47,8 +47,8 @@ const availableCategories = [
   "Accessories",
 ];
 
-// Define the category to icon mapping
-const categoryIcons: { [key: string]: string } = {
+// Export categoryIcons so it can be imported elsewhere
+export const categoryIcons: { [key: string]: string } = {
   Any: "th-large", // Icon for 'Any' category
   Electronics: "tv",
   Furniture: "home",
@@ -167,6 +167,9 @@ const SelectCategoriesScreen: React.FC<SelectCategoriesScreenProps> = ({
     </View>
   );
 };
+
+// Ensure no rating edit features are present
+// Remove any rating input fields or edit handlers if previously added
 
 const styles = StyleSheet.create({
   container: {
