@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import {
   Platform,
   TextInput,
   AppState,
+  Modal,
+  Animated,
+  TouchableWithoutFeedback,
 } from "react-native";
 import {
   getDatabase,
@@ -23,45 +26,14 @@ import {
   remove,
 } from "firebase/database";
 import { getAuth } from "firebase/auth";
-import Modal from "react-native-modal";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { Checkbox } from "react-native-paper";
 import { FontAwesome, FontAwesome6, FontAwesome5 } from "@expo/vector-icons";
 import SelectCategoriesScreen from "../SelectCategoriesScreen";
-import Icon from "react-native-vector-icons/FontAwesome"; // Add this import
-import ImagePicker from "expo-image-picker"; // Import ImagePicker if used
+import { FontAwesome as Icon } from "@expo/vector-icons"; // Use FontAwesome from @expo/vector-icons
 import ReviewsScreen from "./reviews"; // Import ReviewsScreen
-
-// Move categoryIcons definition to the top level, before any components
-const categoryIcons: { [key: string]: string } = {
-  Any: "th-large",
-  Electronics: "tv",
-  Furniture: "home",
-  Clothing: "tshirt",
-  Books: "book",
-  Toys: "puzzle-piece",
-  "Home Appliances": "blender",
-  Garden: "tree",
-  Sports: "futbol-o",
-  Beauty: "heartbeat",
-  Automotive: "car",
-  Health: "medkit",
-  Music: "music",
-  Movies: "film",
-  Games: "gamepad",
-  Jewelry: "diamond",
-  "Pet Supplies": "paw",
-  "Office Supplies": "pencil",
-  "Baby Products": "child",
-  Groceries: "shopping-cart",
-  Art: "paint-brush",
-  Tools: "wrench",
-  Software: "desktop",
-  Photography: "camera",
-  Wearables: "watch",
-  Accessories: "tags",
-};
+import { categoryIcons } from '../styles'; // Import categoryIcons from styles.ts
 
 // Define the Product type
 interface Product {
@@ -232,16 +204,62 @@ const ProductsScreen: React.FC = () => {
   }>({});
   const [bidCounts, setBidCounts] = useState<{ [key: string]: number }>({});
   const [reviews, setReviews] = useState<{ [key: string]: Review[] }>({});
-  const [newReview, setNewReview] = useState({
-    productId: "",
-    rating: 0,
-    comment: "",
-  });
+  const [newReview, setNewReview] = useState<{ [key: string]: { rating: number; comment: string } }>({});
   const [unresultedBidsCount, setUnresultedBidsCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+
+  // Add state for Modal visibility and animation
+  const [isDrawerVisible, setDrawerVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const openDrawer = () => {
+    setDrawerVisible(true);
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height * 0.25, // Changed from 0.5 to 0.25
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const closeDrawer = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => {
+      setDrawerVisible(false);
+    });
+  };
+
+  // Add the handleSave function in index.tsx if not already present
+  const handleSave = (selectedCategories: string[]) => {
+    // You can perform additional actions with the selectedCategories here
+    console.log("Selected Categories:", selectedCategories);
+    closeDrawer();
+  };
+
+  // Update the renderContent function to handle onSave and onClose callbacks
+  const renderContent = () => (
+    <TouchableWithoutFeedback onPress={closeDrawer}>
+      <Animated.View style={[styles.drawer, { top: slideAnim }]}>
+        <View style={styles.drawerHeader}>
+          <Text style={styles.drawerTitle}>Filter Categories</Text>
+          <TouchableOpacity onPress={closeDrawer}>
+            <Icon name="close" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+        <SelectCategoriesScreen
+          selectedCategories={selectedCategories}
+          onSelectCategories={handleCategorySelect}
+          onSave={handleSave} // Pass the handleSave function
+          onClose={closeDrawer} // Pass the closeDrawer function
+        />
+      </Animated.View>
+    </TouchableWithoutFeedback>
+  );
 
   // Define callbacks using useCallback
   const updateUnresultedBidsCount = useCallback((snapshot: any) => {
@@ -604,27 +622,30 @@ const ProductsScreen: React.FC = () => {
       })
     : [];
 
-  const handleSubmitReview = async () => {
+  const handleSubmitReview = async (productId: string) => {
     const auth = getAuth();
     const user = auth.currentUser;
-    if (!user || !newReview.productId) return;
+    if (!user || !newReview[productId]) return;
 
     const db = getDatabase();
-    const reviewRef = push(ref(db, `reviews/${newReview.productId}`));
+    const reviewRef = push(ref(db, `reviews/${productId}`));
 
     const review: Review = {
       id: reviewRef.key!,
       userId: user.uid,
       username: user.displayName || "Anonymous",
-      rating: newReview.rating,
-      comment: newReview.comment,
+      rating: newReview[productId].rating,
+      comment: newReview[productId].comment,
       createdAt: Date.now(),
     };
 
     try {
       await set(reviewRef, review);
       Alert.alert("Success", "Your review has been submitted.");
-      setNewReview({ productId: "", rating: 0, comment: "" });
+      setNewReview((prev) => ({
+        ...prev,
+        [productId]: { rating: 0, comment: "" },
+      }));
     } catch (error) {
       console.error("Error submitting review:", error);
       Alert.alert("Error", "Failed to submit review.");
@@ -650,16 +671,28 @@ const ProductsScreen: React.FC = () => {
           onChangeText={setSearchTerm}
         />
         <TouchableOpacity
-          style={[
-            styles.selectCategoriesButton,
-            selectedCategories.includes("Any") && styles.disabledButton,
-          ]}
-          onPress={() => setCategoryModalVisible(true)}
-          disabled={selectedCategories.includes("Any")}
+          style={styles.categoryButton}
+          onPress={openDrawer} // Opens the custom bottom drawer
         >
-          <Text style={styles.buttonText}>Select Categories</Text>
+          <Text style={styles.categoryButtonText}>Categories</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Add the selected categories display below the search container */}
+      {selectedCategories.length > 0 && (
+        <View style={styles.selectedCategoriesContainer}>
+          {selectedCategories.map((category) => (
+            <View key={category} style={styles.selectedCategory}>
+              <Icon
+                name={categoryIcons[category] as keyof typeof Icon.glyphMap}
+                size={16}
+                style={styles.selectedCategoryIcon}
+              />
+              <Text style={styles.selectedCategoryText}>{category}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Remove the inline categories selection */}
       {/* ...existing code... */}
@@ -739,7 +772,7 @@ const ProductsScreen: React.FC = () => {
                       product.categories.map((category) => (
                         <View key={category} style={styles.categoryIcon}>
                           <Icon
-                            name={categoryIcons[category] || "circle"}
+                            name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
                             size={16}
                             color="#555"
                           />
@@ -797,16 +830,20 @@ const ProductsScreen: React.FC = () => {
                           <TouchableOpacity
                             key={star}
                             onPress={() => {
-                              setNewReview((prev) =>
-                                prev.productId === product.id
-                                  ? { ...prev, rating: star }
-                                  : prev
-                              );
+                              setNewReview((prev) => ({
+                                ...prev,
+                                [product.id]: {
+                                  rating: star,
+                                  comment: prev[product.id]?.comment || "",
+                                },
+                              }));
                             }}
                           >
                             <FontAwesome
                               name={
-                                star <= newReview.rating ? "star" : "star-o"
+                                star <= (newReview[product.id]?.rating || 0)
+                                  ? "star"
+                                  : "star-o"
                               }
                               size={24}
                               color="#FFD700"
@@ -817,38 +854,23 @@ const ProductsScreen: React.FC = () => {
                       <TextInput
                         style={styles.reviewInput}
                         placeholder="Your Comment"
-                        value={
-                          newReview.productId === product.id
-                            ? newReview.comment
-                            : ""
-                        }
+                        value={newReview[product.id]?.comment || ""}
                         onChangeText={(text) =>
-                          setNewReview((prev) =>
-                            prev.productId === product.id
-                              ? { ...prev, comment: text }
-                              : prev
-                          )
+                          setNewReview((prev) => ({
+                            ...prev,
+                            [product.id]: {
+                              rating: prev[product.id]?.rating || 0,
+                              comment: text,
+                            },
+                          }))
                         }
                       />
                       <TouchableOpacity
                         style={styles.submitReviewButton}
-                        onPress={() =>
-                          setNewReview((prev) => ({
-                            ...prev,
-                            productId: product.id,
-                          }))
-                        }
+                        onPress={() => handleSubmitReview(product.id)}
                       >
-                        <Text style={styles.buttonText}>Add Review</Text>
+                        <Text style={styles.buttonText}>Submit Review</Text>
                       </TouchableOpacity>
-                      {newReview.productId === product.id && (
-                        <TouchableOpacity
-                          style={styles.submitReviewButton}
-                          onPress={handleSubmitReview}
-                        >
-                          <Text style={styles.buttonText}>Submit Review</Text>
-                        </TouchableOpacity>
-                      )}
                     </View>
                   </View>
                   <View style={styles.reviewsContainer}>
@@ -886,30 +908,25 @@ const ProductsScreen: React.FC = () => {
 
       {/* Add Modal for category selection */}
       <Modal
-        isVisible={isCategoryModalVisible}
-        onBackdropPress={() => setCategoryModalVisible(false)}
-        style={styles.modal}
+        visible={isDrawerVisible}
+        transparent
+        animationType="none"
+        onRequestClose={closeDrawer}
       >
-        <View style={styles.modalContent}>
-          <SelectCategoriesScreen
-            selectedCategories={selectedCategories}
-            onSelectCategories={handleCategorySelect} // Updated prop name
-            onClose={() => setCategoryModalVisible(false)} // Add onClose prop
-          />
-        </View>
+        {renderContent()}
       </Modal>
 
       <Modal
-        isVisible={isModalVisible}
-        onBackdropPress={() => {
+        visible={isModalVisible}
+        onRequestClose={() => {
           setModalVisible(false);
-          Alert.alert("Close", "Are you sure you want to close this window?"); // Add alert text
+          Alert.alert("Close", "Are you sure you want to close this window?");
         }}
         style={styles.modal}
-        animationIn="slideInUp"
-        animationOut="slideOutDown"
+        transparent={true}
+        animationType="slide"
       >
-        <View style={styles.modalContent}>
+        <ScrollView contentContainerStyle={styles.modalContent}>
           <MyProductsScreen
             selectedProducts={selectedProducts}
             setSelectedProducts={setSelectedProducts}
@@ -925,9 +942,16 @@ const ProductsScreen: React.FC = () => {
               <Text style={styles.buttonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </Modal>
       {/* Remove the logo container */}
+
+      {/* Buttons Container */}
+      {/* <View style={styles.buttonsContainer}>
+        <TouchableOpacity style={styles.submitButton} onPress={handleBidSubmit}>
+          <Text style={styles.buttonText}>Place Bid</Text>
+        </TouchableOpacity>
+      </View> */}
     </View>
   );
 };
@@ -938,6 +962,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f5f5f5",
     padding: 16,
+    paddingBottom: 20, // Add padding to prevent overlap
   },
   loadingContainer: {
     flex: 1,
@@ -965,7 +990,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     width: Platform.select({
       web: "13%",
-      default: "48%",
+      default: "48%",   // 2 cards per row on mobile
     }),
     marginBottom: 16,
     marginHorizontal: "0.5%",
@@ -1156,13 +1181,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     backgroundColor: "#f5f5f5",
+    borderWidth: 1, // Added border width
+    borderColor: "#007AFF", // Added border color
+    borderRadius: 8, // Added border radius for rounded corners
+    shadowColor: "#000", // Added shadow for depth
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3, // For Android shadow
   },
   searchInput: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#ffffff", // Changed background color for contrast
     padding: 12,
     borderRadius: 8,
     marginRight: 8,
+    borderWidth: 1, // Added border width
+    borderColor: "#ccc", // Added border color
   },
   selectCategoriesButton: {
     backgroundColor: "#007AFF",
@@ -1180,7 +1215,9 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 20,
     borderRadius: 10,
-    width: "80%",
+    width: Platform.OS === "windows" ? "60%" : "80%", // Adjust width for Windows
+    maxHeight: "90%", // Prevent overflow on smaller screens
+    flexGrow: 1, // Ensure content can expand
   },
   buttons: {
     flexDirection: "row",
@@ -1224,7 +1261,101 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginBottom: 8,
   },
+  categoryButton: {
+    backgroundColor: "#007AFF",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8, // Added margin for spacing
+  },
+  categoryButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  bottomDrawer: {
+    justifyContent: "flex-end",
+    margin: 0,
+  },
+  drawerContent: {
+    backgroundColor: "white",
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: Dimensions.get("window").height * 0.5, // Adjust height as needed
+  },
+  bottomSheetContent: {
+    backgroundColor: 'white',
+    padding: 16,
+    height: 450,
+  },
+  drawer: {
+    position: 'absolute',
+    left: 0,
+    width: '100%',
+    height: Dimensions.get('window').height * 0.75, // Increased height from 0.6 to 0.75
+    bottom: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1, // Set lower zIndex
+  },
+  buttonsContainer: {
+    // New style for buttons container
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    zIndex: 2, // Ensure buttons are above the drawer
+    alignItems: 'center',
+  },
+  submitButton: {
+    // Style for the submit button
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    width: '90%',
+    alignItems: 'center',
+  },
+  selectedCategoriesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 16,
+  },
+  selectedCategory: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#e0e0e0",
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedCategoryIcon: {
+    marginRight: 4,
+  },
+  selectedCategoryText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  drawerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  drawerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
 });
 
 export default ProductsScreen;
-

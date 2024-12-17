@@ -39,24 +39,36 @@ const ReviewsScreen = ({ productId }: { productId: string }) => {
     return () => unsubscribe();
   }, [productId]);
 
+  const handleBid = () => {
+    Alert.alert("Bid placed!");
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Reviews</Text>
-      {reviews.length > 0 ? (
-        reviews.map((review) => (
-          <View key={review.id} style={styles.reviewItem}>
-            <Text style={styles.username}>{review.username}</Text>
-            <Text style={styles.rating}>Rating: {review.rating}/5</Text>
-            <Text style={styles.comment}>{review.comment}</Text>
-            <Text style={styles.date}>
-              {new Date(review.createdAt).toLocaleDateString()}
-            </Text>
-          </View>
-        ))
-      ) : (
-        <Text style={styles.noReviews}>No reviews yet.</Text>
-      )}
-    </ScrollView>
+    <View style={styles.container}>
+      <ScrollView style={styles.container}>
+        <Text style={styles.title}>Reviews</Text>
+        <View style={styles.reviewsContainer}>
+          {reviews.length > 0 ? (
+            reviews.map((review) => (
+              <View key={review.id} style={styles.reviewItem}>
+                <Text style={styles.username}>{review.username}</Text>
+                <Text style={styles.rating}>Rating: {review.rating}/5</Text>
+                <Text style={styles.comment}>{review.comment}</Text>
+                <Text style={styles.date}>
+                  {new Date(review.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.noReviews}>No reviews yet.</Text>
+          )}
+        </View>
+      </ScrollView>
+
+      <TouchableOpacity style={styles.bidButton} onPress={handleBid}>
+        <Text style={styles.buttonText}>Place Bid</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -69,6 +81,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 16,
+  },
+  reviewsContainer: {
+    maxHeight: 200, // Limit height
+    overflow: 'scroll',
   },
   reviewItem: {
     marginBottom: 16,
@@ -99,6 +115,22 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     textAlign: "center",
     marginTop: 16,
+  },
+  bidButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 20,
+    left: '50%',
+    transform: [{ translateX: -75 }], // Adjust based on button width
+    width: 150,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

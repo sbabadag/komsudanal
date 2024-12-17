@@ -22,7 +22,6 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { getAuth } from "firebase/auth";
 import { FontAwesome } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker"; // Add this import
 import { Checkbox } from "react-native-paper"; // Add this import
 import SelectCategoriesScreen from "../SelectCategoriesScreen"; // Add this import
 import Modal from "react-native-modal"; // Add this import
@@ -205,9 +204,9 @@ export default function MyProductsScreen() {
   // Update the handleCategorySelect to manage 'Any' selection
   const handleCategorySelect = (selectedCategories: string[]) => {
     if (selectedCategories.includes("Any")) {
-      setSelectedCategories(["Any"]);
+      setNewProduct((prev) => ({ ...prev, categories: ["Any"] }));
     } else {
-      setSelectedCategories(selectedCategories);
+      setNewProduct((prev) => ({ ...prev, categories: selectedCategories }));
     }
     setCategoryModalVisible(false);
   };
@@ -458,8 +457,31 @@ export default function MyProductsScreen() {
     );
   }
 
+  function handleBid(): void {
+    Alert.alert(
+      "Place a Bid",
+      "Would you like to place a bid on this item?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Place Bid",
+          onPress: () => {
+            // This would typically navigate to a bidding screen
+            // or open a modal with bidding functionality
+            Alert.alert("Coming Soon", "Bidding functionality will be available soon!");
+          }
+        }
+      ]
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
+      {/* Remove the search input field */}
+      {/*
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -467,17 +489,8 @@ export default function MyProductsScreen() {
           value={searchTerm}
           onChangeText={setSearchTerm}
         />
-        <TouchableOpacity
-          style={[
-            styles.selectCategoriesButton,
-            selectedCategories.includes("Any") && styles.disabledButton,
-          ]}
-          onPress={() => setCategoryModalVisible(true)}
-          disabled={selectedCategories.includes("Any")}
-        >
-          <Text style={styles.buttonText}>Select Categories</Text>
-        </TouchableOpacity>
       </View>
+      */}
 
       <ScrollView style={styles.container}>
         <Text style={styles.title}>My Products</Text>
@@ -526,20 +539,15 @@ export default function MyProductsScreen() {
             }
           />
           <TouchableOpacity
-            style={[
-              styles.selectCategoriesButton,
-              selectedCategories.includes("Any") && styles.disabledButton,
-            ]}
+            style={styles.selectCategoriesButton} // Use the enhanced style
             onPress={() => setCategoryModalVisible(true)}
-            disabled={selectedCategories.includes("Any")}
           >
-            <Icon
-              name="tags"
-              size={20}
-              color="#fff"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.buttonText}>Select Categories</Text>
+            <Icon name="tags" size={20} style={styles.selectCategoriesIcon} /> {/* Optional Icon */}
+            <Text style={styles.textButtonText}>
+              {newProduct.categories.length > 0
+                ? `Selected: ${newProduct.categories.join(", ")}`
+                : "Select Categories"}
+            </Text>
           </TouchableOpacity>
           <View style={styles.selectedCategories}>
             {newProduct.categories.map((category) => (
@@ -638,9 +646,28 @@ export default function MyProductsScreen() {
                       ${product.priceStart.toLocaleString()} - $
                       {product.priceEnd.toLocaleString()}
                     </Text>
-                    <Text style={styles.productCategory}>
-                      Categories: {product.categories?.join(", ") || "None"}
-                    </Text>
+                    <View style={styles.productCategories}>
+                      {Platform.OS === "web" ? (
+                        <Text
+                          style={styles.truncatedCategories}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {product.categories.join(", ")}
+                        </Text>
+                      ) : (
+                        product.categories.map((category) => (
+                          <View key={category} style={styles.categoryIcon}>
+                            <Icon
+                              name={categoryIcons[category] || "circle"}
+                              size={16}
+                              color="#555"
+                            />
+                            <Text style={styles.categoryText}>{category}</Text>
+                          </View>
+                        ))
+                      )}
+                    </View>
                     <View style={styles.ratingContainer}>
                       {averageRatings[product.id] ? (
                         <View style={styles.stars}>
@@ -673,6 +700,9 @@ export default function MyProductsScreen() {
                     >
                       <Text style={styles.buttonText}>Delete</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity style={styles.bidButton} onPress={handleBid}>
+                      <Text style={styles.buttonText}>Place Bid</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))}
@@ -693,6 +723,7 @@ export default function MyProductsScreen() {
             <SelectCategoriesScreen
               selectedCategories={newProduct.categories}
               onSelectCategories={handleCategorySelect}
+              onSave={handleCategorySelect} // Add this line
               onClose={() => setCategoryModalVisible(false)}
             />
           </View>
@@ -705,8 +736,9 @@ export default function MyProductsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
     padding: 16,
+    paddingBottom: 80, // Add extra padding at the bottom
+    // ...existing container styles...
   },
   searchContainer: {
     flexDirection: "row",
@@ -803,12 +835,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    width: "48%", // Ensure two cards fit in one row
+    width: Platform.select({
+      web: "23%",    // Adjusted for better sizing on web
+      default: "48%", // Maintains 2 cards per row on mobile
+    }),
     marginBottom: 16,
-    alignItems: "center", // Center elements horizontally
-    justifyContent: "center", // Center elements vertically
-    padding: 16, // Add padding to ensure content fits well
-    height: 400, // Set a taller fixed height to accommodate extra buttons
+    marginHorizontal: "0.5%",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    height: 400,
   },
   cardImage: {
     width: "100%",
@@ -879,12 +915,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectCategoriesButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
     backgroundColor: "#007AFF",
-    borderRadius: 8,
+    paddingVertical: 12, // Increased vertical padding for better touch area
+    paddingHorizontal: 20, // Increased horizontal padding
+    borderRadius: 25, // More rounded corners
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
+    flexDirection: "row",
+    shadowColor: "#000", // Add shadow for depth
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5, // For Android shadow
   },
   selectedCategoryText: {
     marginTop: 10,
@@ -904,6 +947,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 10,
     width: "80%",
+    height: '80%', // Ensure modal does not push buttons out
   },
   selectedCategories: {
     flexDirection: "row",
@@ -936,5 +980,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     fontStyle: "italic",
+  },
+  textButton: {
+    padding: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  textButtonText: {
+    color: "#fff", // Change text color to white for better contrast
+    fontSize: 16, // Increase font size for readability
+    fontWeight: "600", // Make text bolder
+    textDecorationLine: "none", // Remove underline
+  },
+  selectCategoriesIcon: { // Optional: Style for the icon
+    marginRight: 8,
+    color: "#fff",
+    fontSize: 18,
+  },
+  productCategories: {
+    flexDirection: "row",
+    flexWrap: "nowrap", // Prevent wrapping
+    overflow: "hidden",
+    maxWidth: "100%", // Ensure it doesn't exceed the card width
+  },
+  truncatedCategories: {
+    fontSize: 14,
+    color: "#333",
+    flexShrink: 1, // Allow text to shrink
+  },
+  categoryIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: "#555",
+    marginLeft: 4,
+  },
+  bidButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  saveButton: {
+    backgroundColor: "#007AFF",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  saveButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 16,
   },
 });

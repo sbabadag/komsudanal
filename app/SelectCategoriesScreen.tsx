@@ -1,22 +1,22 @@
-import React, { useState } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
+  FlatList,
 } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome"; // Add this import
-import { Checkbox } from "react-native-paper";
+import Icon from "react-native-vector-icons/FontAwesome";
+import { styles } from './styles';
 
 // Define the SelectCategoriesScreenProps interface
 interface SelectCategoriesScreenProps {
   selectedCategories: string[];
-  onSelectCategories: (selected: string[]) => void;
+  onSelectCategories: (selectedCategories: string[]) => void;
+  onSave: (selectedCategories: string[]) => void;
   onClose: () => void;
 }
 
-// Define the expanded list of available categories
+// Remove duplicate "Books" from availableCategories
 const availableCategories = [
   "Any",
   "Electronics",
@@ -42,7 +42,6 @@ const availableCategories = [
   "Tools",
   "Software",
   "Photography",
-  "Books",
   "Wearables",
   "Accessories",
 ];
@@ -77,162 +76,80 @@ export const categoryIcons: { [key: string]: string } = {
   Accessories: "tags",
 };
 
+// Memoized CategoryItem component to prevent unnecessary re-renders
+const CategoryItem = React.memo(({ category, isSelected, onToggle }: { category: string; isSelected: boolean; onToggle: (category: string) => void }) => (
+  <TouchableOpacity
+    style={[
+      styles.categoryItem,
+      isSelected && styles.selectedCategoryItem,
+    ]}
+    onPress={() => onToggle(category)}
+  >
+    <Icon
+      name={categoryIcons[category]}
+      size={20}
+      style={styles.icon}
+    />
+    <Text style={styles.categoryText}>{category}</Text>
+  </TouchableOpacity>
+));
+
 const SelectCategoriesScreen: React.FC<SelectCategoriesScreenProps> = ({
   selectedCategories,
   onSelectCategories,
+  onSave,
   onClose,
 }) => {
-  const allCategories = [
-    "Electronics",
-    "Furniture",
-    "Clothing",
-    "Books",
-    "Toys",
-    "Home Appliances",
-    "Garden",
-    "Sports",
-    "Beauty",
-    "Automotive",
-    "Health",
-    "Music",
-    "Movies",
-    "Games",
-    "Jewelry",
-    "Pet Supplies",
-    "Office Supplies",
-    "Baby Products",
-    "Groceries",
-    "Art",
-    "Tools",
-    "Software",
-    "Photography",
-    "Wearables",
-    "Accessories",
-    "Any",
-  ];
-
-  const [localSelectedCategories, setLocalSelectedCategories] =
-    useState<string[]>(selectedCategories);
-
-  const toggleCategory = (category: string) => {
+  const toggleCategory = useCallback((category: string) => {
     if (category === "Any") {
-      setLocalSelectedCategories(["Any"]);
+      onSelectCategories(["Any"]);
     } else {
-      let updatedCategories = [...localSelectedCategories];
+      let updatedCategories = [...selectedCategories];
+      if (updatedCategories.includes("Any")) {
+        updatedCategories = [];
+      }
       if (updatedCategories.includes(category)) {
         updatedCategories = updatedCategories.filter((c) => c !== category);
       } else {
         updatedCategories.push(category);
       }
-      if (updatedCategories.includes("Any")) {
-        updatedCategories = ["Any"];
-      }
-      setLocalSelectedCategories(updatedCategories);
+      onSelectCategories(updatedCategories);
     }
-  };
+  }, [selectedCategories, onSelectCategories]);
 
-  const handleSave = () => {
-    onSelectCategories(localSelectedCategories);
-  };
+  const renderItem = useCallback(({ item }: { item: string }) => (
+    <CategoryItem
+      category={item}
+      isSelected={selectedCategories.includes(item)}
+      onToggle={toggleCategory}
+    />
+  ), [selectedCategories, toggleCategory]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Select Categories</Text>
-      <ScrollView contentContainerStyle={styles.container}>
-        {Array.isArray(allCategories) &&
-          allCategories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              onPress={() => toggleCategory(category)}
-              style={styles.categoryItem}
-            >
-              <Checkbox
-                status={
-                  localSelectedCategories.includes(category)
-                    ? "checked"
-                    : "unchecked"
-                }
-                onPress={() => toggleCategory(category)}
-              />
-              <Text style={styles.categoryText}>{category}</Text>
-            </TouchableOpacity>
-          ))}
-      </ScrollView>
-      <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-        <Text style={styles.buttonText}>Save</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-        <Text style={styles.buttonText}>Cancel</Text>
-      </TouchableOpacity>
+      <View style={styles.header}>
+        <Text style={styles.title}>Select Categories</Text>
+        <TouchableOpacity style={styles.applyButton} onPress={() => onSave(selectedCategories)}>
+          <Text style={styles.buttonText}>Apply</Text>
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        data={availableCategories}
+        keyExtractor={(item) => item}
+        renderItem={renderItem}
+        numColumns={3}
+        columnWrapperStyle={styles.columnWrapper} // Add this line
+        contentContainerStyle={styles.categoriesContainer}
+        initialNumToRender={9}
+        maxToRenderPerBatch={9}
+        windowSize={5}
+      />
     </View>
   );
 };
 
 // Ensure no rating edit features are present
 // Remove any rating input fields or edit handlers if previously added
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-    backgroundColor: "white",
-    borderRadius: 10,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  categoryItem: {
-    width: "30%",
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 10,
-    marginBottom: 12,
-    borderRadius: 8,
-    backgroundColor: "#f0f0f0",
-  },
-  selectedCategory: {
-    backgroundColor: "#007AFF",
-  },
-  icon: {
-    marginRight: 8,
-  },
-  categoryText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  applyButton: {
-    padding: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  applyButtonText: {
-    color: "white",
-    fontWeight: "600",
-  },
-  closeButton: {
-    padding: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  buttonText: {
-    color: "white",
-    fontWeight: "600",
-  },
-  saveButton: {
-    backgroundColor: "#4CAF50",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-  },
-});
 
 export default SelectCategoriesScreen;
