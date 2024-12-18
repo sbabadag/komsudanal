@@ -191,6 +191,23 @@ const MyProductsScreen: React.FC<MyProductsScreenProps> = ({
   );
 };
 
+const getRecommendedProducts = (userId: string, products: Product[], likedProducts: string[]): Product[] => {
+  // Simple collaborative filtering based on liked products
+  const likedProductIds = new Set(likedProducts);
+  const recommendedProducts: Product[] = [];
+
+  products.forEach((product) => {
+    if (!likedProductIds.has(product.id) && product.userId !== userId) {
+      recommendedProducts.push(product);
+    }
+  });
+
+  // Sort recommended products by some criteria (e.g., most liked)
+  recommendedProducts.sort((a, b) => b.priceStart - a.priceStart);
+
+  return recommendedProducts.slice(0, 5); // Return top 5 recommendations
+};
+
 const ProductsScreen: React.FC = () => {
   // Move all hooks to the top level
   const [products, setProducts] = useState<Product[]>([]);
@@ -210,6 +227,7 @@ const ProductsScreen: React.FC = () => {
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
 
   // Add state for Modal visibility and animation
   const [isDrawerVisible, setDrawerVisible] = useState(false);
@@ -427,6 +445,15 @@ const ProductsScreen: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (user) {
+      const recommendations = getRecommendedProducts(user.uid, products, likedProducts);
+      setRecommendedProducts(recommendations);
+    }
+  }, [products, likedProducts]);
 
   const sendPushNotification = async (
     expoPushToken: string,
@@ -694,10 +721,214 @@ const ProductsScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Remove the inline categories selection */}
-      {/* ...existing code... */}
-
       <ScrollView style={styles.container}>
+        {/* Recommended Products Section */}
+        <View style={styles.recommendedSection}>
+          <Text style={styles.sectionTitle}>Recommended for You</Text>
+          <View style={styles.cardsWrapper}>
+            {recommendedProducts.map((product) => (
+              <TouchableOpacity
+                key={product.id}
+                style={[styles.card, styles.recommendedCard]}
+                onPress={() => {
+                  setTargetProductId(product.id);
+                  setModalVisible(true);
+                }}
+              >
+                <View style={styles.recommendedLabel}>
+                  <Text style={styles.recommendedLabelText}>Recommended</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.likeButton}
+                  onPress={() => handleLikeProduct(product.id)}
+                >
+                  <FontAwesome
+                    name={
+                      likedProducts.includes(product.id) ? "heart" : "heart-o"
+                    }
+                    size={24}
+                    color="red"
+                  />
+                </TouchableOpacity>
+                {product.images && product.images.length > 0 ? (
+                  <Image
+                    source={{ uri: product.images[0] }}
+                    style={styles.cardImage}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: "https://placeholder.com/placeholder.png" }}
+                    style={styles.cardImage}
+                  />
+                )}
+                <View style={styles.cardContent}>
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <Text style={styles.productDescription}>
+                    {product.description}
+                  </Text>
+                  <Text style={styles.productPrice}>
+                    {product.priceStart} TL - {product.priceEnd} TL
+                  </Text>
+                  <View style={styles.coinContainer}>
+                    <Text style={styles.productCoins}>
+                      Coins to bid:{" "}
+                      {calculateCoins(product.priceStart, product.priceEnd)}
+                    </Text>
+                    <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                  </View>
+                  <Text style={styles.productCreatedAt}>
+                    Created: {new Date(product.createdAt).toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.bidCount}>
+                    Bids: {bidCounts[product.id] || 0}
+                  </Text>
+                  <View style={styles.ownerInfo}>
+                    <Image
+                      source={{
+                        uri:
+                          ownerPhotos[product.userId]?.photoUrl ||
+                          "https://placeholder.com/user",
+                      }}
+                      style={styles.ownerPhoto}
+                    />
+                    <Text style={styles.ownerNickname}>
+                      {ownerPhotos[product.userId]?.nickname || "NoName"}
+                    </Text>
+                  </View>
+                  <View style={styles.productCategories}>
+                    {Array.isArray(product.categories) &&
+                      product.categories.map((category) => (
+                        <View key={category} style={styles.categoryIcon}>
+                          <Icon
+                            name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
+                            size={16}
+                            color="#555"
+                          />
+                          <Text style={styles.categoryText}>{category}</Text>
+                        </View>
+                      ))}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.bidButton, { marginTop: 8 }]}
+                    onPress={() => {
+                      setTargetProductId(product.id);
+                      setModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.buttonText}>Place Bid</Text>
+                  </TouchableOpacity>
+
+                  {/* Reviews Section */}
+                  <View style={styles.reviewsContainer}>
+                    <Text style={styles.reviewsTitle}>Reviews:</Text>
+                    {Array.isArray(reviews[product.id]) &&
+                    reviews[product.id].length > 0 ? (
+                      reviews[product.id].map((review) => (
+                        <View key={review.id} style={styles.reviewItem}>
+                          <Text style={styles.reviewUsername}>
+                            {review.username}
+                          </Text>
+                          <View style={styles.reviewRating}>
+                            {Array.from({ length: 5 }, (_, index) => (
+                              <FontAwesome
+                                key={index}
+                                name={
+                                  index < review.rating ? "star" : "star-o"
+                                }
+                                size={16}
+                                color="#FFD700"
+                              />
+                            ))}
+                          </View>
+                          <Text style={styles.reviewComment}>
+                            {review.comment}
+                          </Text>
+                          <Text style={styles.reviewDate}>
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noReviewsText}>No reviews yet.</Text>
+                    )}
+                    {/* Add Review Form */}
+                    <View style={styles.addReviewContainer}>
+                      <View style={styles.starRatingContainer}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <TouchableOpacity
+                            key={star}
+                            onPress={() => {
+                              setNewReview((prev) => ({
+                                ...prev,
+                                [product.id]: {
+                                  rating: star,
+                                  comment: prev[product.id]?.comment || "",
+                                },
+                              }));
+                            }}
+                          >
+                            <FontAwesome
+                              name={
+                                star <= (newReview[product.id]?.rating || 0)
+                                  ? "star"
+                                  : "star-o"
+                              }
+                              size={24}
+                              color="#FFD700"
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput
+                        style={styles.reviewInput}
+                        placeholder="Your Comment"
+                        value={newReview[product.id]?.comment || ""}
+                        onChangeText={(text) =>
+                          setNewReview((prev) => ({
+                            ...prev,
+                            [product.id]: {
+                              rating: prev[product.id]?.rating || 0,
+                              comment: text,
+                            },
+                          }))
+                        }
+                      />
+                      <TouchableOpacity
+                        style={styles.submitReviewButton}
+                        onPress={() => handleSubmitReview(product.id)}
+                      >
+                        <Text style={styles.buttonText}>Submit Review</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={styles.reviewsContainer}>
+                    {reviews[product.id] && reviews[product.id].length > 0 ? (
+                      <View style={styles.stars}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <FontAwesome
+                            key={star}
+                            name={
+                              reviews[product.id][0].rating >= star
+                                ? "star"
+                                : "star-o"
+                            }
+                            size={16}
+                            color="#FFD700"
+                            // Make stars non-interactive
+                            // Remove onPress handlers
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.cardsWrapper}>
           {Array.isArray(filteredProducts) && filteredProducts.length > 0 ? (
             filteredProducts.map((product) => (
@@ -1354,6 +1585,31 @@ const styles = StyleSheet.create({
   },
   drawerTitle: {
     fontSize: 18,
+    fontWeight: "bold",
+  },
+  recommendedSection: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  recommendedCard: {
+    backgroundColor: "#E5E5E5", // RAL9002 background for recommended cards
+  },
+  recommendedLabel: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "#FFD700",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    zIndex: 2,
+  },
+  recommendedLabelText: {
+    color: "#fff",
     fontWeight: "bold",
   },
 });
