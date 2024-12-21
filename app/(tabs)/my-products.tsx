@@ -107,7 +107,9 @@ export default function MyProductsScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]); // Add this state
   const [searchTerm, setSearchTerm] = useState(""); // Add this state
   const [reviews, setReviews] = useState<{ [key: string]: Review[] }>({}); // Add this state
-  const [averageRatings, setAverageRatings] = useState<{ [key: string]: number }>({}); // Add this state
+  const [averageRatings, setAverageRatings] = useState<{
+    [key: string]: number;
+  }>({}); // Add this state
 
   useEffect(() => {
     const auth = getAuth();
@@ -164,7 +166,10 @@ export default function MyProductsScreen() {
       for (const productId in reviews) {
         const productReviews = reviews[productId];
         if (productReviews.length > 0) {
-          const total = productReviews.reduce((sum, review) => sum + review.rating, 0);
+          const total = productReviews.reduce(
+            (sum, review) => sum + review.rating,
+            0
+          );
           avgRatings[productId] = total / productReviews.length;
         }
       }
@@ -458,24 +463,23 @@ export default function MyProductsScreen() {
   }
 
   function handleBid(): void {
-    Alert.alert(
-      "Place a Bid",
-      "Would you like to place a bid on this item?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
+    Alert.alert("Place a Bid", "Would you like to place a bid on this item?", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Place Bid",
+        onPress: () => {
+          // This would typically navigate to a bidding screen
+          // or open a modal with bidding functionality
+          Alert.alert(
+            "Coming Soon",
+            "Bidding functionality will be available soon!"
+          );
         },
-        {
-          text: "Place Bid",
-          onPress: () => {
-            // This would typically navigate to a bidding screen
-            // or open a modal with bidding functionality
-            Alert.alert("Coming Soon", "Bidding functionality will be available soon!");
-          }
-        }
-      ]
-    );
+      },
+    ]);
   }
 
   return (
@@ -542,7 +546,8 @@ export default function MyProductsScreen() {
             style={styles.selectCategoriesButton} // Use the enhanced style
             onPress={() => setCategoryModalVisible(true)}
           >
-            <Icon name="tags" size={20} style={styles.selectCategoriesIcon} /> {/* Optional Icon */}
+            <Icon name="tags" size={20} style={styles.selectCategoriesIcon} />{" "}
+            {/* Optional Icon */}
             <Text style={styles.textButtonText}>
               {newProduct.categories.length > 0
                 ? `Selected: ${newProduct.categories.join(", ")}`
@@ -685,7 +690,9 @@ export default function MyProductsScreen() {
                           ))}
                         </View>
                       ) : (
-                        <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                        <Text style={styles.noReviewsText}>
+                          No ratings yet.
+                        </Text>
                       )}
                     </View>
                     <TouchableOpacity
@@ -699,9 +706,6 @@ export default function MyProductsScreen() {
                       onPress={() => handleDeleteProduct(product.id)}
                     >
                       <Text style={styles.buttonText}>Delete</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.bidButton} onPress={handleBid}>
-                      <Text style={styles.buttonText}>Place Bid</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -835,12 +839,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    width: Platform.select({
-      web: "23%",    // Adjusted for better sizing on web
-      default: "48%", // Maintains 2 cards per row on mobile
-    }),
+    width: "48%", // Adjusted for better sizing on mobile
     marginBottom: 16,
-    marginHorizontal: "0.5%",
+    marginHorizontal: "1%", // Adjusted for better spacing
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
@@ -947,7 +948,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 10,
     width: "80%",
-    height: '80%', // Ensure modal does not push buttons out
+    height: "80%", // Ensure modal does not push buttons out
   },
   selectedCategories: {
     flexDirection: "row",
@@ -992,7 +993,8 @@ const styles = StyleSheet.create({
     fontWeight: "600", // Make text bolder
     textDecorationLine: "none", // Remove underline
   },
-  selectCategoriesIcon: { // Optional: Style for the icon
+  selectCategoriesIcon: {
+    // Optional: Style for the icon
     marginRight: 8,
     color: "#fff",
     fontSize: 18,
@@ -1020,10 +1022,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   bidButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 16,
   },
   saveButton: {

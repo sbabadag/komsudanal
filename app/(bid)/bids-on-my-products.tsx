@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,23 +10,32 @@ import {
   Dimensions,
   Alert,
   Platform,
-} from 'react-native';
-import { getDatabase, ref, onValue, update, remove, set, get } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
-import { useNavigation } from '@react-navigation/native';
-import { FontAwesome } from '@expo/vector-icons';
-import { Ionicons } from '@expo/vector-icons';
-import { FontAwesome6 } from '@expo/vector-icons'; // Add this import
+} from "react-native";
+import {
+  getDatabase,
+  ref,
+  onValue,
+  update,
+  remove,
+  set,
+  get,
+} from "firebase/database";
+import { getAuth } from "firebase/auth";
+import { useNavigation } from "@react-navigation/native";
+import { FontAwesome } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome6 } from "@expo/vector-icons"; // Add this import
+import ChatComponent from "../components/ChatComponent"; // Add this import
 
 interface Bid {
   id: string;
   targetProductId: string;
   offeredProducts: string[];
-  status: 'pending' | 'accepted' | 'rejected';
+  status: "pending" | "accepted" | "rejected";
   createdAt: number;
   userId: string;
   notification?: string;
-  targetProductOwnerId : string;
+  targetProductOwnerId: string;
 }
 
 interface Product {
@@ -39,7 +48,7 @@ interface Product {
   userId: string;
 }
 
-const screenWidth = Dimensions.get('window').width;
+const screenWidth = Dimensions.get("window").width;
 const cardWidth = screenWidth - 40; // Adjust card width to fit the screen with some padding
 
 const calculateCoins = (priceStart: number, priceEnd: number) => {
@@ -61,8 +70,8 @@ export default function BidsOnMyProductsScreen() {
 
     if (!user) return;
 
-    const bidsRef = ref(db, 'bids');
-    const productsRef = ref(db, 'products');
+    const bidsRef = ref(db, "bids");
+    const productsRef = ref(db, "products");
 
     const unsubscribeBids = onValue(bidsRef, (snapshot) => {
       const data = snapshot.val();
@@ -80,8 +89,8 @@ export default function BidsOnMyProductsScreen() {
       const data = snapshot.val();
       if (data) {
         const allProducts: { [key: string]: Product } = {};
-        Object.keys(data).forEach(userId => {
-          Object.keys(data[userId]).forEach(productId => {
+        Object.keys(data).forEach((userId) => {
+          Object.keys(data[userId]).forEach((productId) => {
             allProducts[productId] = {
               ...data[userId][productId],
               id: productId,
@@ -101,35 +110,43 @@ export default function BidsOnMyProductsScreen() {
 
   useEffect(() => {
     const updateTabBadge = (count: number) => {
-    //  navigation.setOptions({
-    //    tabBarBadge: count > 0 ? count : null,
-   //   });
+      //  navigation.setOptions({
+      //    tabBarBadge: count > 0 ? count : null,
+      //   });
     };
 
-    const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
+    const resultedBidsCount = bids.filter(
+      (bid) => bid.status !== "pending"
+    ).length;
     updateTabBadge(resultedBidsCount);
   }, [bids, navigation]);
 
-  const handleBidResponse = async (bidId: string, status: 'accepted' | 'rejected') => {
+  const handleBidResponse = async (
+    bidId: string,
+    status: "accepted" | "rejected"
+  ) => {
     const db = getDatabase();
     const bidRef = ref(db, `bids/${bidId}`);
-    const bid = bids.find(b => b.id === bidId);
+    const bid = bids.find((b) => b.id === bidId);
     if (!bid) {
-      console.error('Bid not found', bidId);
-      Alert.alert('Error', 'Bid not found.');
+      console.error("Bid not found", bidId);
+      Alert.alert("Error", "Bid not found.");
       return;
     }
 
     const targetProduct = products[bid.targetProductId];
     if (!targetProduct) {
-      console.error('Target product not found for bid', bid.targetProductId);
-      Alert.alert('Error', 'Target product not found.');
+      console.error("Target product not found for bid", bid.targetProductId);
+      Alert.alert("Error", "Target product not found.");
       return;
     }
 
     try {
-      await update(bidRef, { status, notification: `Your bid has been ${status}.` });
-      Alert.alert('Success', `Bid has been ${status}.`);
+      await update(bidRef, {
+        status,
+        notification: `Your bid has been ${status}.`,
+      });
+      Alert.alert("Success", `Bid has been ${status}.`);
 
       // Send notification to the user who made the bid
       const userTokenRef = ref(db, `expoPushTokens/${bid.userId}`);
@@ -137,17 +154,25 @@ export default function BidsOnMyProductsScreen() {
       const expoPushToken = tokenSnapshot.val();
 
       if (expoPushToken) {
-        await sendPushNotification(expoPushToken, `Your bid on ${targetProduct.name} has been ${status}.`);
+        await sendPushNotification(
+          expoPushToken,
+          `Your bid on ${targetProduct.name} has been ${status}.`
+        );
       }
 
       // Update the tab badge number after handling the bid response
-      const resultedBidsCount = bids.filter(bid => bid.status !== 'pending').length;
+      const resultedBidsCount = bids.filter(
+        (bid) => bid.status !== "pending"
+      ).length;
       navigation.setOptions({
         tabBarBadge: resultedBidsCount > 0 ? resultedBidsCount : null,
       });
     } catch (error) {
       console.error(`Error updating bid status to ${status}:`, error);
-      Alert.alert('Error', `There was an error updating the bid status. Please try again.`);
+      Alert.alert(
+        "Error",
+        `There was an error updating the bid status. Please try again.`
+      );
     }
   };
 
@@ -168,8 +193,8 @@ export default function BidsOnMyProductsScreen() {
         setLikedProducts((prev) => [...prev, productId]);
       }
     } catch (error) {
-      console.error('Error updating likes:', error);
-      Alert.alert('Error', 'Failed to update likes');
+      console.error("Error updating likes:", error);
+      Alert.alert("Error", "Failed to update likes");
     }
   };
 
@@ -203,73 +228,118 @@ export default function BidsOnMyProductsScreen() {
         <View style={styles.cardsWrapper}>
           {bids.map((bid) => {
             const product = products[bid.targetProductId];
-            const offeredProducts = bid.offeredProducts.map(id => products[id]).filter(Boolean);
+            const offeredProducts = bid.offeredProducts
+              .map((id) => products[id])
+              .filter(Boolean);
             return (
               <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
                 {product && (
-                  <View style={styles.productSection}>
-                    <TouchableOpacity
-                      style={styles.likeButton}
-                      onPress={() => handleLikeProduct(product.id)}
-                    >
-                      <FontAwesome
-                        name={likedProducts.includes(product.id) ? 'heart' : 'heart-o'}
-                        size={24}
-                        color="red"
-                      />
-                    </TouchableOpacity>
-                    <Text style={styles.sectionTitle}>Product You Want</Text>
-                    <View style={styles.productCard}>
-                      <Image source={{ uri: product.images[0] }} style={styles.productImage} />
-                      <View style={styles.productInfo}>
-                        <Text style={styles.productName}>{product.name}</Text>
-                        <Text style={styles.productDescription}>{product.description}</Text>
-                        <Text style={styles.productPrice}>
-                          {product.priceStart} TL - {product.priceEnd} TL
-                        </Text>
-                        <View style={styles.coinContainer}>
-                          <Text style={styles.productCoins}>Coins to bid: {calculateCoins(product.priceStart, product.priceEnd)}</Text>
-                          <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                  <>
+                    <View style={styles.productSection}>
+                      <TouchableOpacity
+                        style={styles.likeButton}
+                        onPress={() => handleLikeProduct(product.id)}
+                      >
+                        <FontAwesome
+                          name={
+                            likedProducts.includes(product.id)
+                              ? "heart"
+                              : "heart-o"
+                          }
+                          size={24}
+                          color="red"
+                        />
+                      </TouchableOpacity>
+                      <Text style={styles.sectionTitle}>Product You Want</Text>
+                      <View style={styles.productCard}>
+                        <Image
+                          source={{ uri: product.images[0] }}
+                          style={styles.productImage}
+                        />
+                        <View style={styles.productInfo}>
+                          <Text style={styles.productName}>{product.name}</Text>
+                          <Text style={styles.productDescription}>
+                            {product.description}
+                          </Text>
+                          <Text style={styles.productPrice}>
+                            {product.priceStart} TL - {product.priceEnd} TL
+                          </Text>
+                          <View style={styles.coinContainer}>
+                            <Text style={styles.productCoins}>
+                              Coins to bid:{" "}
+                              {calculateCoins(
+                                product.priceStart,
+                                product.priceEnd
+                              )}
+                            </Text>
+                            <FontAwesome6
+                              name="coins"
+                              size={16}
+                              color="#FFD700"
+                            />
+                          </View>
                         </View>
                       </View>
                     </View>
-                  </View>
+                    <View style={styles.offeredSection}>
+                      <Text style={styles.sectionTitle}>Offered Products</Text>
+                      {offeredProducts.map((offeredProduct) => (
+                        <View
+                          key={offeredProduct.id}
+                          style={styles.productCard}
+                        >
+                          <Image
+                            source={{ uri: offeredProduct.images[0] }}
+                            style={styles.productImage}
+                          />
+                          <View style={styles.productInfo}>
+                            <Text style={styles.productName}>
+                              {offeredProduct.name}
+                            </Text>
+                            <Text style={styles.productDescription}>
+                              {offeredProduct.description}
+                            </Text>
+                            <Text style={styles.productPrice}>
+                              ${offeredProduct.priceStart} - $
+                              {offeredProduct.priceEnd}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.bidInfo}>
+                      <Text style={styles.bidStatus}>Status: {bid.status}</Text>
+                      <Text style={styles.bidDate}>
+                        Date: {new Date(bid.createdAt).toLocaleDateString()}
+                      </Text>
+                      {bid.status === "pending" && (
+                        <View style={styles.buttonContainer}>
+                          <TouchableOpacity
+                            style={[styles.button, styles.acceptButton]}
+                            onPress={() =>
+                              handleBidResponse(bid.id, "accepted")
+                            }
+                          >
+                            <Text style={styles.buttonText}>Accept</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.button, styles.rejectButton]}
+                            onPress={() =>
+                              handleBidResponse(bid.id, "rejected")
+                            }
+                          >
+                            <Text style={styles.buttonText}>Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                    <ChatComponent
+                      bidId={bid.id}
+                      isActive={bid.status === "accepted"}
+                    />{" "}
+                    {/* Embed ChatComponent */}
+                  </>
                 )}
-                <View style={styles.offeredSection}>
-                  <Text style={styles.sectionTitle}>Offered Products</Text>
-                  {offeredProducts.map(offeredProduct => (
-                    <View key={offeredProduct.id} style={styles.productCard}>
-                      <Image source={{ uri: offeredProduct.images[0] }} style={styles.productImage} />
-                      <View style={styles.productInfo}>
-                        <Text style={styles.productName}>{offeredProduct.name}</Text>
-                        <Text style={styles.productDescription}>{offeredProduct.description}</Text>
-                        <Text style={styles.productPrice}>
-                          ${offeredProduct.priceStart} - ${offeredProduct.priceEnd}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-                <View style={styles.bidInfo}>
-                  <Text style={styles.bidStatus}>Status: {bid.status}</Text>
-                  <Text style={styles.bidDate}>Date: {new Date(bid.createdAt).toLocaleDateString()}</Text>
-                  {bid.status === 'pending' && (
-                    <View style={styles.buttonContainer}>
-                      <TouchableOpacity
-                        style={[styles.button, styles.acceptButton]}
-                        onPress={() => handleBidResponse(bid.id, 'accepted')}
-                      >
-                        <Text style={styles.buttonText}>Accept</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.button, styles.rejectButton]}
-                        onPress={() => handleBidResponse(bid.id, 'rejected')}
-                      >
-                        <Text style={styles.buttonText}>Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
               </View>
             );
           })}
@@ -281,24 +351,24 @@ export default function BidsOnMyProductsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   cardsWrapper: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     margin: 10,
     padding: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
-    width: Platform.OS === 'web' ? '13%' : '46%',
+    width: Platform.OS === "web" ? "13%" : "46%",
   },
   productSection: {
     marginBottom: 10,
@@ -308,12 +378,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
   },
   productCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 10,
   },
   productImage: {
@@ -327,24 +397,24 @@ const styles = StyleSheet.create({
   },
   productName: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   productDescription: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
   },
   productPrice: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
   },
   productCoins: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
     marginRight: 4,
   },
   coinContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 4,
   },
   bidInfo: {
@@ -352,47 +422,47 @@ const styles = StyleSheet.create({
   },
   bidStatus: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   bidDate: {
     fontSize: 14,
-    color: '#888',
+    color: "#888",
   },
   buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 10,
   },
   button: {
     flex: 1,
     padding: 10,
     borderRadius: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginHorizontal: 5,
   },
   acceptButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
   },
   rejectButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: "#F44336",
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 32,
   },
   emptyText: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   likeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     right: 10,
     zIndex: 1,
@@ -401,30 +471,30 @@ const styles = StyleSheet.create({
 async function sendPushNotification(expoPushToken: string, message: string) {
   const messageBody = {
     to: expoPushToken,
-    sound: 'default',
-    title: 'Bid Update',
+    sound: "default",
+    title: "Bid Update",
     body: message,
     data: { message },
   };
 
   try {
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
       headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(messageBody),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to send push notification');
+      throw new Error("Failed to send push notification");
     }
 
     const responseData = await response.json();
-    console.log('Push notification response:', responseData);
+    console.log("Push notification response:", responseData);
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error("Error sending push notification:", error);
   }
 }
 
