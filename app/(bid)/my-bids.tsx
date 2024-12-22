@@ -26,10 +26,17 @@ interface Bid {
   userId: string;
 }
 
+interface UserProfile {
+  photoUrl: string;
+  nickname: string;
+  fullName: string;
+}
+
 export default function MyBidsScreen() {
   const [myBids, setMyBids] = useState<Bid[]>([]);
   const [products, setProducts] = useState<{ [key: string]: any }>({});
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
+  const [userProfiles, setUserProfiles] = useState<{ [key: string]: UserProfile }>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -100,6 +107,26 @@ export default function MyBidsScreen() {
     const unsubscribe = onValue(likesRef, (snapshot) => {
       const likesData = snapshot.val() || {};
       setLikedProducts(Object.keys(likesData));
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const usersRef = ref(db, 'users');
+
+    const unsubscribe = onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const profiles: { [key: string]: UserProfile } = {};
+        Object.keys(data).forEach(userId => {
+          if (data[userId].profile) {
+            profiles[userId] = data[userId].profile;
+          }
+        });
+        setUserProfiles(profiles);
+      }
     });
 
     return () => unsubscribe();
@@ -183,6 +210,11 @@ export default function MyBidsScreen() {
     const offeredProducts = bid.offeredProducts
       .map((id) => products[id])
       .filter(Boolean);
+
+    const sellerProfile = userProfiles[targetProduct.userId] || {
+      nickname: 'Unknown Seller',
+      photoUrl: 'https://via.placeholder.com/40',
+    };
 
     return (
       <View key={bid.id} style={styles.bidCard}>
@@ -292,6 +324,18 @@ export default function MyBidsScreen() {
         </View>
         <ChatComponent bidId={bid.id} isActive={bid.status === "accepted"} />{" "}
         {/* Embed ChatComponent */}
+        <View style={styles.userInfoSection}>
+          <View style={styles.userInfo}>
+            <Image 
+              source={{ uri: sellerProfile.photoUrl }} 
+              style={styles.userPhoto} 
+            />
+            <View>
+              <Text style={styles.userLabel}>Seller</Text>
+              <Text style={styles.userName}>{sellerProfile.nickname}</Text>
+            </View>
+          </View>
+        </View>
       </View>
     );
   };
@@ -523,5 +567,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 4,
+  },
+  userInfoSection: {
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  userLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

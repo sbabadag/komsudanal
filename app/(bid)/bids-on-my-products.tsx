@@ -48,6 +48,12 @@ interface Product {
   userId: string;
 }
 
+interface UserProfile {
+  photoUrl: string;
+  nickname: string;
+  fullName: string;
+}
+
 const screenWidth = Dimensions.get("window").width;
 const cardWidth = screenWidth - 40; // Adjust card width to fit the screen with some padding
 
@@ -61,6 +67,7 @@ export default function BidsOnMyProductsScreen() {
   const [products, setProducts] = useState<{ [key: string]: Product }>({});
   const [loading, setLoading] = useState(true);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
+  const [userProfiles, setUserProfiles] = useState<{ [key: string]: UserProfile }>({});
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -120,6 +127,26 @@ export default function BidsOnMyProductsScreen() {
     ).length;
     updateTabBadge(resultedBidsCount);
   }, [bids, navigation]);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const usersRef = ref(db, 'users');
+
+    const unsubscribe = onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const profiles: { [key: string]: UserProfile } = {};
+        Object.keys(data).forEach(userId => {
+          if (data[userId].profile) {
+            profiles[userId] = data[userId].profile;
+          }
+        });
+        setUserProfiles(profiles);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleBidResponse = async (
     bidId: string,
@@ -231,8 +258,28 @@ export default function BidsOnMyProductsScreen() {
             const offeredProducts = bid.offeredProducts
               .map((id) => products[id])
               .filter(Boolean);
+            
+            const buyerProfile = userProfiles[bid.userId] || {
+              nickname: 'Unknown Buyer',
+              photoUrl: 'https://via.placeholder.com/40'
+            };
+
             return (
               <View key={bid.id} style={[styles.card, { width: cardWidth }]}>
+                {/* Add buyer information section at the top */}
+                <View style={styles.userInfoSection}>
+                  <View style={styles.userInfo}>
+                    <Image 
+                      source={{ uri: buyerProfile.photoUrl }} 
+                      style={styles.userPhoto} 
+                    />
+                    <View>
+                      <Text style={styles.userLabel}>Buyer</Text>
+                      <Text style={styles.userName}>{buyerProfile.nickname}</Text>
+                    </View>
+                  </View>
+                </View>
+
                 {product && (
                   <>
                     <View style={styles.productSection}>
@@ -466,6 +513,32 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     zIndex: 1,
+  },
+  userInfoSection: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#f8f8f8',
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  userLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 async function sendPushNotification(expoPushToken: string, message: string) {
