@@ -1,37 +1,35 @@
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, Alert, Platform, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-
-// Make sure to register your app and get these credentials from Google Cloud Console
-const GOOGLE_CLIENT_ID = "817455873090-n59323uc9ffbd5vm92h3es0kbtbbg84g.apps.googleusercontent.com";
-const GOOGLE_IOS_CLIENT_ID = "817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl.apps.googleusercontent.com"; // If you're supporting iOS
+import { getAuth, signInWithEmailAndPassword, sendEmailVerification, signOut } from 'firebase/auth';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import useGoogleAuth from '../hooks/useGoogleAuth'; // Update to default import
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
+  const { signInWithGoogle, response } = useGoogleAuth(); // Get both signInWithGoogle and response
   const [isLoading, setIsLoading] = useState(false);
   const [credentials, setCredentials] = useState({
     email: '',
     password: '',
   });
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '817455873090-vj8qgftod0msnuo65l7v0d4pp2fiia3c.apps.googleusercontent.com',
-    iosClientId: '817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl.apps.googleusercontent.com',
-    webClientId: '817455873090-7321qin1jnaou6rmu4a6dfktprioirnr.apps.googleusercontent.com',
-  });
-
   useEffect(() => {
     const checkStoredCredentials = async () => {
-      const storedEmail = await AsyncStorage.getItem('email');
-      const storedPassword = await AsyncStorage.getItem('password');
-      if (storedEmail && storedPassword) {
-        setCredentials({ email: storedEmail, password: storedPassword });
-        handleLogin(storedEmail, storedPassword);
+      try {
+        const storedEmail = await AsyncStorage.getItem('email') || '';
+        const storedPassword = await AsyncStorage.getItem('password') || '';
+        setCredentials({
+          email: storedEmail,
+          password: storedPassword
+        });
+      } catch (error) {
+        console.error('Error loading stored credentials:', error);
       }
     };
 
@@ -58,13 +56,38 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
       if (userCredential.user) {
+        // Check if email is verified
+        if (!userCredential.user.emailVerified) {
+          Alert.alert(
+            'Email Not Verified',
+            'Please verify your email address before signing in. Check your inbox for the verification link.',
+            [
+              { text: 'OK' },
+              {
+                text: 'Resend Email',
+                onPress: async () => {
+                  try {
+                    await sendEmailVerification(userCredential.user);
+                    Alert.alert('Success', 'Verification email has been resent');
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to resend verification email');
+                  }
+                }
+              }
+            ]
+          );
+          // Sign out the user since they haven't verified their email
+          await signOut(auth);
+          return;
+        }
+
         await AsyncStorage.setItem('email', email);
         await AsyncStorage.setItem('password', password);
         router.replace('/(tabs)');
       }
     } catch (error: any) {
       let errorMessage = 'Wrong email or password';
-      
+
       switch (error.code) {
         case 'auth/user-not-found':
           errorMessage = 'No account found with this email';
@@ -79,69 +102,80 @@ export default function Login() {
           errorMessage = 'Too many failed attempts. Please try again later';
           break;
       }
-      
+
       Alert.alert('Login Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleSignIn = async () => {
     try {
-      await promptAsync();
-    } catch (error) {
-      console.error('Google Sign-In Error:', error);
+      await signInWithGoogle();
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      console.error('Google Sign In Error:', error);
+      Alert.alert(
+        'Sign In Error',
+        'Failed to sign in with Google. Please try again.'
+      );
     }
   };
 
+  const handleTextChange = (field: 'email' | 'password', value: string) => {
+    setCredentials(prev => ({
+      ...prev,
+      [field]: value || '' // Ensure value is never undefined
+    }));
+  };
+
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={['#1E1E1E', '#2D2D2D']}
+      style={styles.container}
+    >
       <View style={styles.contentContainer}>
         <View style={styles.headerContainer}>
-          <Text style={styles.welcomeText}>Welcome Back</Text>
-          <Text style={styles.subtitleText}>Sign in to continue</Text>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+          />
+          <Text style={styles.welcomeText}>Welcome Back!</Text>
+          <Text style={styles.subtitleText}>Trade smarter, not harder</Text>
         </View>
 
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                value={credentials.email}
-                onChangeText={(text) => setCredentials({ ...credentials, email: text })}
-                placeholder="Enter your email"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                placeholderTextColor="#A0A0A0"
-              />
-            </View>
+            <Ionicons name="mail-outline" size={24} color="#FFD700" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              value={credentials.email}
+              onChangeText={(text) => handleTextChange('email', text)}
+              placeholder="Enter your email"
+              placeholderTextColor="#666"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.input}
-                value={credentials.password}
-                onChangeText={(text) => setCredentials({ ...credentials, password: text })}
-                placeholder="Enter your password"
-                secureTextEntry
-                placeholderTextColor="#A0A0A0"
-              />
-            </View>
+            <Ionicons name="lock-closed-outline" size={24} color="#FFD700" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              value={credentials.password}
+              onChangeText={(text) => handleTextChange('password', text)}
+              placeholder="Enter your password"
+              placeholderTextColor="#666"
+              secureTextEntry
+            />
           </View>
 
           <TouchableOpacity style={styles.forgotPassword}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
-          <View style={styles.container}>
-          <TouchableOpacity 
-            style={[
-              styles.loginButton,
-              isLoading && { opacity: 0.7 }
-            ]} 
+
+          <TouchableOpacity
+            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
             onPress={() => handleLogin()}
             disabled={isLoading}
           >
@@ -149,25 +183,17 @@ export default function Login() {
               {isLoading ? 'Signing In...' : 'Sign In'}
             </Text>
           </TouchableOpacity>
-          </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <View style={styles.container}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.googleButton}
-            onPress={handleGoogleLogin}
+            onPress={handleGoogleSignIn}
           >
-            <Image 
+            <Image
               source={require('../../assets/images/google-logo.png')}
               style={styles.googleIcon}
             />
             <Text style={styles.googleButtonText}>Continue with Google</Text>
           </TouchableOpacity>
-          </View>
 
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>
@@ -176,140 +202,146 @@ export default function Login() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.decorationContainer}>
+          <View style={styles.decorationDot} />
+          <View style={[styles.decorationDot, styles.decorationDotActive]} />
+          <View style={styles.decorationDot} />
+        </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'center', // Center vertically
   },
   contentContainer: {
-    paddingHorizontal: 24,
-    width: '100%',
-    maxWidth: 400, // Maximum width for larger screens
-    alignSelf: 'center', // Center horizontally
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center',
   },
   headerContainer: {
-    alignItems: 'center', // Center header text
-    marginBottom: 40,
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 24,
   },
   welcomeText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1A1A1A',
+    color: '#FFD700',
     marginBottom: 8,
-    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   subtitleText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    fontSize: 18,
+    color: '#999',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   formContainer: {
-    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    textAlign: 'left', // Keep labels left-aligned for better readability
-  },
-  inputWrapper: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  input: {
-    padding: 16,
-    fontSize: 16,
-    color: '#1A1A1A',
-    textAlign: 'center', // Center input text
-  },
-  forgotPassword: {
-    alignSelf: 'center',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  loginButton: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 32,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    height: 60,
   },
-  dividerLine: {
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
     flex: 1,
-    height: 1,
-    backgroundColor: '#E0E0E0',
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#666',
-    fontSize: 14,
+  loginButton: {
+    backgroundColor: '#FFD700',
+    height: 60,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
+    color: '#1E1E1E',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    height: 60,
+    borderRadius: 16,
+    marginBottom: 24,
   },
   googleButtonText: {
-    color: '#1A1A1A',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    marginLeft: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   signupContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 32,
   },
   signupText: {
-    color: '#666',
+    color: '#999',
     fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
   },
   signupLink: {
-    color: '#007AFF',
+    color: '#FFD700',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Helvetica Neue' : 'sans-serif',
+  },
+  decorationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  decorationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 4,
+  },
+  decorationDotActive: {
+    backgroundColor: '#FFD700',
+    width: 24,
+  },
+  googleIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
 });

@@ -3,19 +3,20 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import SignInScreen from '../app/(auth)/sign-in';
-import HomeScreen from '../app/(tabs)/index';
-import MyBidsScreen from '../app/(bid)/my-bids';
+import SignInScreen from './(auth)/sign-in';
+import HomeScreen from './(tabs)/index';
+import MyBidsScreen from './(bid)/my-bids';
 import MyProductsScreen from './(tabs)/my-products';
-import BidsOnMyProductsScreen from '../app/(bid)/bids-on-my-products';
-import ProfileScreen from '../app/(tabs)/profile';
-import '../config/firebaseConfig';
+import BidsOnMyProductsScreen from './(bid)/bids-on-my-products';
+import ProfileScreen from './(tabs)/profile';
+import './config/firebaseConfig';
 import { View, Text, Image, StyleSheet, Platform, TouchableOpacity, Animated, Dimensions, PanResponder } from 'react-native';
 import { getDatabase, ref, onValue, set } from 'firebase/database';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { Stack, useRouter } from 'expo-router';
 
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+const NativeStack = createNativeStackNavigator();
 const screenWidth = Dimensions.get('window').width;
 
 function TabNavigator() {
@@ -60,10 +61,10 @@ function TabNavigator() {
             resultedBids++;
           }
         }
-        if (bid.targetProductOwnerId === user.uid ) 
+        if (bid.targetProductOwnerId === user.uid)
           if (bid.status === 'pending') {
-          pendingBidsOnMyProducts++;
-        }
+            pendingBidsOnMyProducts++;
+          }
       });
 
       setPendingBidsCount(pendingBids);
@@ -148,13 +149,13 @@ function TabNavigator() {
             let onMyBidsbadgeCount = 0;
             switch (route.name) {
               case 'Home': iconName = 'home-outline'; break;
-              case 'My Bids': 
-                iconName = 'list-outline'; 
+              case 'My Bids':
+                iconName = 'list-outline';
                 badgeCount = pendingBidsCount; // Set badge count for My Bids
                 break;
               case 'My Products': iconName = 'cube-outline'; break;
-              case 'Bids On My Products': 
-                iconName = 'clipboard-outline'; 
+              case 'Bids On My Products':
+                iconName = 'clipboard-outline';
                 onMyBidsbadgeCount = pendingBidsOnMyProductsCount; // Set badge count for BOM
                 break;
               case 'Profile': iconName = 'person-outline'; break; // Add icon for Profile
@@ -182,27 +183,27 @@ function TabNavigator() {
           lazy: false
         })}
       >
-        <Tab.Screen 
-          name="Home" 
+        <Tab.Screen
+          name="Home"
           component={HomeScreen}
           options={{
             tabBarLabel: 'Home'
           }}
         />
-        <Tab.Screen 
-          name="My Bids" 
+        <Tab.Screen
+          name="My Bids"
           component={MyBidsScreen}
         />
-        <Tab.Screen 
-          name="My Products" 
+        <Tab.Screen
+          name="My Products"
           component={MyProductsScreen}
         />
-        <Tab.Screen 
-          name="Bids On My Products" 
+        <Tab.Screen
+          name="Bids On My Products"
           component={BidsOnMyProductsScreen}
         />
-        <Tab.Screen 
-          name="Profile" 
+        <Tab.Screen
+          name="Profile"
           component={ProfileScreen} // Add Profile screen to the tab navigator
         />
       </Tab.Navigator>
@@ -238,102 +239,25 @@ function TabNavigator() {
 }
 
 export default function RootLayout() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigation = useNavigation<NavigationProp<any>>();
-
-  const updateUnresultedBidsCount = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const db = getDatabase();
-    const unresultedBidsRef = ref(db, `users/${user.uid}/unresultedBidsCount`);
-    const bidsRef = ref(db, 'bids');
-
-    onValue(bidsRef, (snapshot) => {
-      const bidsData = snapshot.val() || {};
-      const userBids = Object.values(bidsData).filter((bid: any) => bid.targetProductOwnerId === user.uid && bid.status === 'pending');
-      set(unresultedBidsRef, userBids.length);
-    });
-  };
-
+  const router = useRouter();
   useEffect(() => {
     const auth = getAuth();
-    onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(!!user);
+    return onAuthStateChanged(auth, (user) => {
       if (user) {
-        updateUnresultedBidsCount();
+        // Redirect to tabs if authenticated
+        router.replace('/(tabs)');
+      } else {
+        // Redirect to auth if not authenticated
+        router.replace('/(auth)/sign-in');
       }
     });
   }, []);
 
   return (
-    <Stack.Navigator>
-      {!isAuthenticated ? (
-        <Stack.Screen 
-          name="SignIn" 
-          component={SignInScreen} 
-          options={{ headerShown: false }}
-        />
-      ) : (
-        <>
-          <Stack.Screen 
-            name="Main" 
-            component={TabNavigator}
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="Home" 
-            component={HomeScreen}
-            options={{ headerShown: false }} 
-          />
-          <Stack.Screen 
-            name="My Bids" 
-            component={MyBidsScreen}
-            options={{
-              headerLeft: () => (
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                  <Ionicons name="arrow-back-outline" size={24} color="black" />
-                </TouchableOpacity>
-              ),
-            }} 
-          />
-          <Stack.Screen 
-            name="My Products" 
-            component={MyProductsScreen}
-            options={{
-              headerLeft: () => (
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                  <Ionicons name="arrow-back-outline" size={24} color="black" />
-                </TouchableOpacity>
-              ),
-            }} 
-          />
-          <Stack.Screen 
-            name="Bids On My Products" 
-            component={BidsOnMyProductsScreen}
-            options={{
-              headerLeft: () => (
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                  <Ionicons name="arrow-back-outline" size={24} color="black" />
-                </TouchableOpacity>
-              ),
-            }} 
-          />
-          <Stack.Screen 
-            name="Profile" 
-            component={ProfileScreen}
-            options={{
-              headerLeft: () => (
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                  <Ionicons name="arrow-back-outline" size={24} color="black" />
-                </TouchableOpacity>
-              ),
-            }} 
-          />
-        </>
-      )}
-    </Stack.Navigator>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    </Stack>
   );
 }
 

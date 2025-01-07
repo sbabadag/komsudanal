@@ -27,6 +27,7 @@
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="komsudanal"/>
         <data android:scheme="com.sbabadag.komsudanal"/>
+        <data android:scheme="exp+komsudanal"/>
       </intent-filter>
     </activity>
   </application>

@@ -631,22 +631,22 @@ const ProductsScreen: React.FC = () => {
   // Ensure 'filteredProducts' is always an array
   const filteredProducts = Array.isArray(products)
     ? products.filter((product) => {
-        if (selectedCategories.includes("Any")) {
-          return true; // Disable filtering
-        }
-        const matchesSearchTerm =
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.description.toLowerCase().includes(searchTerm.toLowerCase());
+      if (selectedCategories.includes("Any")) {
+        return true; // Disable filtering
+      }
+      const matchesSearchTerm =
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesCategory =
-          selectedCategories.length === 0 ||
-          (Array.isArray(product.categories) &&
-            product.categories.some((category) =>
-              selectedCategories.includes(category)
-            ));
+      const matchesCategory =
+        selectedCategories.length === 0 ||
+        (Array.isArray(product.categories) &&
+          product.categories.some((category) =>
+            selectedCategories.includes(category)
+          ));
 
-        return matchesSearchTerm && matchesCategory;
-      })
+      return matchesSearchTerm && matchesCategory;
+    })
     : [];
 
   const handleSubmitReview = async (productId: string) => {
@@ -822,7 +822,7 @@ const ProductsScreen: React.FC = () => {
                   <View style={styles.reviewsContainer}>
                     <Text style={styles.reviewsTitle}>Reviews:</Text>
                     {Array.isArray(reviews[product.id]) &&
-                    reviews[product.id].length > 0 ? (
+                      reviews[product.id].length > 0 ? (
                       reviews[product.id].map((review) => (
                         <View key={review.id} style={styles.reviewItem}>
                           <Text style={styles.reviewUsername}>
@@ -914,8 +914,8 @@ const ProductsScreen: React.FC = () => {
                             }
                             size={16}
                             color="#FFD700"
-                            // Make stars non-interactive
-                            // Remove onPress handlers
+                          // Make stars non-interactive
+                          // Remove onPress handlers
                           />
                         ))}
                       </View>
@@ -937,9 +937,9 @@ const ProductsScreen: React.FC = () => {
                 style={[
                   styles.card,
                   selectedProducts.includes(product.id) &&
-                    styles.selectedProduct,
+                  styles.selectedProduct,
                 ]}
-                // Removed onPress from the card
+              // Removed onPress from the card
               >
                 <TouchableOpacity
                   style={styles.likeButton}
@@ -1025,7 +1025,7 @@ const ProductsScreen: React.FC = () => {
                   <View style={styles.reviewsContainer}>
                     <Text style={styles.reviewsTitle}>Reviews:</Text>
                     {Array.isArray(reviews[product.id]) &&
-                    reviews[product.id].length > 0 ? (
+                      reviews[product.id].length > 0 ? (
                       reviews[product.id].map((review) => (
                         <View key={review.id} style={styles.reviewItem}>
                           <Text style={styles.reviewUsername}>
@@ -1117,8 +1117,8 @@ const ProductsScreen: React.FC = () => {
                             }
                             size={16}
                             color="#FFD700"
-                            // Make stars non-interactive
-                            // Remove onPress handlers
+                          // Make stars non-interactive
+                          // Remove onPress handlers
                           />
                         ))}
                       </View>
@@ -1614,4 +1614,9 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProductsScreen;
+export default function HomeScreen() {
+  return (
+    <ProductsScreen />
+  );
+}
+

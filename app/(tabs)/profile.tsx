@@ -1,5 +1,6 @@
 import { getDatabase, onValue, ref, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, ScrollView, Text, TextInput, StyleSheet, TouchableOpacity, View, Image } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
@@ -126,6 +127,19 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleSignOut = async () => {
+    const auth = getAuth();
+    try {
+      await auth.signOut();
+      // Clear any locally stored credentials
+      await AsyncStorage.clear();
+      Alert.alert('Success', 'You have been signed out');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sign out');
+      console.error('Sign out error:', error);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.profileSection}>
@@ -210,6 +224,15 @@ export default function ProfileScreen() {
           onPress={handleBuyCoins}
         >
           <Text style={styles.buyCoinsButtonText}>Buy 10 Coins</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.signOutSection}>
+        <TouchableOpacity 
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+        >
+          <Text style={styles.signOutButtonText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -310,6 +333,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     alignItems: 'center',
+  },
+  signOutSection: {
+    padding: 16,
+    backgroundColor: 'white',
+    margin: 16,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+  },
+  signOutButton: {
+    backgroundColor: '#FF3B30',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    width: '100%',
+  },
+  signOutButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   coinsContainer: {
     flexDirection: 'row',

@@ -326,9 +326,9 @@ export default function MyBidsScreen() {
         {/* Embed ChatComponent */}
         <View style={styles.userInfoSection}>
           <View style={styles.userInfo}>
-            <Image 
-              source={{ uri: sellerProfile.photoUrl }} 
-              style={styles.userPhoto} 
+            <Image
+              source={{ uri: sellerProfile.photoUrl }}
+              style={styles.userPhoto}
             />
             <View>
               <Text style={styles.userLabel}>Seller</Text>

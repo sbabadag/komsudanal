@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { SplashScreen } from 'expo-router';
+import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { getDatabase, ref, set } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { Platform } from 'react-native';
-
-// ...existing code...
 
 const registerForPushNotificationsAsync = async () => {
   let token;
@@ -49,30 +49,8 @@ const registerForPushNotificationsAsync = async () => {
 };
 
 export default function App() {
-  const [notificationCount, setNotificationCount] = useState(0);
+  const [fontsLoaded] = useFonts({
+    // Add any custom fonts here
+  });
 
-  interface Notification {
-    request: {
-      content: {
-        title: string | null;
-        subtitle: string | null;
-        body: string | null;
-        data: Record<string, any>;
-        sound: "default" | "defaultCritical" | "custom" | null;
-      };
-    };
-  }
-
-  const handleNotification = (notification: Notification) => {
-    setNotificationCount(prevCount => prevCount + 1);
-  };
-
-  useEffect(() => {
-    registerForPushNotificationsAsync();
-    const subscription = Notifications.addNotificationReceivedListener(handleNotification);
-    return () => subscription.remove();
-    // ...existing code...
-  }, []);
-
-  // ...existing code...
 }
