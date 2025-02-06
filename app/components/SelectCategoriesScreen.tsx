@@ -4,9 +4,10 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
+  ScrollView,
 } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome";
-import { styles } from './styles';
+import { FontAwesome } from '@expo/vector-icons';  // Update import
+import { styles } from 'C:/RN/KOMSUDANAL/komsudanal/app/styles';
 
 // Define the SelectCategoriesScreenProps interface
 interface SelectCategoriesScreenProps {
@@ -85,9 +86,10 @@ const CategoryItem = React.memo(({ category, isSelected, onToggle }: { category:
     ]}
     onPress={() => onToggle(category)}
   >
-    <Icon
-      name={categoryIcons[category]}
+    <FontAwesome
+      name={categoryIcons[category] || 'question-circle'}
       size={20}
+      color={isSelected ? '#fff' : '#333'}
       style={styles.icon}
     />
     <Text style={styles.categoryText}>{category}</Text>
@@ -127,29 +129,46 @@ const SelectCategoriesScreen: React.FC<SelectCategoriesScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Select Categories</Text>
-        <TouchableOpacity style={styles.applyButton} onPress={() => onSave(selectedCategories)}>
-          <Text style={styles.buttonText}>Apply</Text>
+      <ScrollView style={styles.categoriesContainer}>
+        <View style={styles.grid}>
+          {availableCategories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              style={[
+                styles.categoryItem,
+                selectedCategories.includes(category) && styles.selectedCategoryItem,
+              ]}
+              onPress={() => toggleCategory(category)}
+            >
+              <View style={styles.categoryContent}>
+                <FontAwesome
+                  name={categoryIcons[category] || 'question-circle'}
+                  size={20}
+                  color={selectedCategories.includes(category) ? '#fff' : '#333'}
+                  style={styles.icon}
+                />
+                <Text style={[
+                  styles.categoryItemText,
+                  selectedCategories.includes(category) && styles.selectedCategoryItemText,
+                ]}>
+                  {category}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={[styles.button, styles.primaryButton]}
+          onPress={() => onSave(selectedCategories)}
+        >
+          <Text style={styles.buttonText}>Apply Filters</Text>
         </TouchableOpacity>
       </View>
-
-      <FlatList
-        data={availableCategories}
-        keyExtractor={(item) => item}
-        renderItem={renderItem}
-        numColumns={3}
-        columnWrapperStyle={styles.columnWrapper} // Add this line
-        contentContainerStyle={styles.categoriesContainer}
-        initialNumToRender={9}
-        maxToRenderPerBatch={9}
-        windowSize={5}
-      />
     </View>
   );
 };
-
-// Ensure no rating edit features are present
-// Remove any rating input fields or edit handlers if previously added
 
 export default SelectCategoriesScreen;

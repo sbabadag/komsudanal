@@ -23,9 +23,11 @@ import * as ImagePicker from "expo-image-picker";
 import { getAuth } from "firebase/auth";
 import { FontAwesome } from "@expo/vector-icons";
 import { Checkbox } from "react-native-paper"; // Add this import
-import SelectCategoriesScreen from "../SelectCategoriesScreen"; // Add this import
+import SelectCategoriesScreen from "../components/SelectCategoriesScreen"; // Add this import
 import Modal from "react-native-modal"; // Add this import
 import Icon from "react-native-vector-icons/FontAwesome"; // Add this import
+import { uploadImageToFirebase } from '../utils/imageUpload'; // Add this import
+import { getStorage } from 'firebase/storage'; // Add this import
 
 interface Product {
   id: string;
@@ -180,29 +182,55 @@ export default function MyProductsScreen() {
   }, [reviews]);
 
   const handleImagePick = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      // Get current user
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('Error', 'Please login to upload images');
+        return;
+      }
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
-      if (uri) {
+      // Request media library permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Error', 'Sorry, we need camera roll permissions to upload images');
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images", // Changed from ImagePicker.MediaType.Images
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         setPublishing(true);
         try {
+          const uri = result.assets[0].uri;
+          const storage = getStorage();
+
+          const downloadURL = await uploadImageToFirebase(
+            uri,
+            `products/${user.uid}/images`
+          );
+
           setNewProduct((prev) => ({
             ...prev,
-            images: [...prev.images, uri],
+            images: [...prev.images, downloadURL],
           }));
         } catch (error) {
-          console.error("Error handling image:", error);
-          Alert.alert("Error", "Failed to add image");
+          console.error('Error uploading image:', error);
+          Alert.alert('Error', 'Failed to upload image');
         } finally {
           setPublishing(false);
         }
       }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
     }
   };
 
@@ -246,6 +274,7 @@ export default function MyProductsScreen() {
 
     setPublishing(true);
     try {
+      // No need to handle image upload here anymore as we're already storing Firebase URLs
       const db = getDatabase();
       const productsRef = ref(db, `products/${user.uid}`);
       const newProductRef = push(productsRef);
@@ -436,22 +465,22 @@ export default function MyProductsScreen() {
   // Update the filtering logic to handle 'Any'
   const filteredProducts = Array.isArray(products)
     ? products.filter((product) => {
-        if (selectedCategories.includes("Any")) {
-          return true; // Disable filtering
-        }
-        const matchesSearchTerm =
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.description.toLowerCase().includes(searchTerm.toLowerCase());
+      if (selectedCategories.includes("Any")) {
+        return true; // Disable filtering
+      }
+      const matchesSearchTerm =
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-        const matchesCategory =
-          selectedCategories.length === 0 ||
-          (product.categories &&
-            product.categories.some((category) =>
-              selectedCategories.includes(category)
-            ));
+      const matchesCategory =
+        selectedCategories.length === 0 ||
+        (product.categories &&
+          product.categories.some((category) =>
+            selectedCategories.includes(category)
+          ));
 
-        return matchesSearchTerm && matchesCategory;
-      })
+      return matchesSearchTerm && matchesCategory;
+    })
     : [];
 
   if (loading) {

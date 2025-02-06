@@ -15,6 +15,7 @@ import {
   Modal,
   Animated,
   TouchableWithoutFeedback,
+  SafeAreaView,
 } from "react-native";
 import {
   getDatabase,
@@ -30,10 +31,11 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import { Checkbox } from "react-native-paper";
 import { FontAwesome, FontAwesome6, FontAwesome5 } from "@expo/vector-icons";
-import SelectCategoriesScreen from "../SelectCategoriesScreen";
+import SelectCategoriesScreen from "../components/SelectCategoriesScreen"; // Update this line
 import { FontAwesome as Icon } from "@expo/vector-icons"; // Use FontAwesome from @expo/vector-icons
-import ReviewsScreen from "./reviews"; // Import ReviewsScreen
+import ReviewsScreen from "../components/reviews"; // Import ReviewsScreen
 import { categoryIcons } from '../styles'; // Import categoryIcons from styles.ts
+import Constants from 'expo-constants';
 
 // Define the Product type
 interface Product {
@@ -138,14 +140,20 @@ const MyProductsScreen: React.FC<MyProductsScreenProps> = ({
   }
 
   return (
-    <ScrollView style={styles.drawerContainer}>
+    <ScrollView style={[styles.drawerContainer, { width: '100%' }]}>
       <Text style={styles.title}>Select Products to Offer</Text>
       <View style={styles.cardsWrapper}>
         {products.map((product) => (
           <TouchableOpacity
             key={product.id}
             style={[
-              styles.card,
+              {
+                ...styles.card,
+                width: Platform.select({
+                  web: 'calc((100% - 80px) / 6)',
+                  default: '45%',
+                }),
+              },
               selectedProducts.includes(product.id) && styles.selectedProduct,
             ]}
             onPress={() => handleProductSelect(product.id)}
@@ -459,6 +467,11 @@ const ProductsScreen: React.FC = () => {
     expoPushToken: string,
     message: string
   ) => {
+    if (!Constants.isDevice && Platform.OS !== 'web') {
+      console.log('Push notifications are not supported in the simulator');
+      return;
+    }
+
     const messageBody = {
       to: expoPushToken,
       sound: "default",
@@ -484,7 +497,7 @@ const ProductsScreen: React.FC = () => {
       const responseData = await response.json();
       console.log("Push notification response:", responseData);
     } catch (error) {
-      console.error("Error sending push notification:", error);
+      console.log('Error sending notification:', error);
     }
   };
 
@@ -594,7 +607,11 @@ const ProductsScreen: React.FC = () => {
   useEffect(() => {
     const auth = getAuth();
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      console.log('No user logged in');
+      setLoading(false);
+      return;
+    }
 
     const db = getDatabase();
     const likesRef = ref(db, `likes/${user.uid}`);
@@ -689,501 +706,503 @@ const ProductsScreen: React.FC = () => {
 
   // Update the rendering to handle empty or undefined 'filteredProducts'
   return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search products..."
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
-        <TouchableOpacity
-          style={styles.categoryButton}
-          onPress={openDrawer} // Opens the custom bottom drawer
-        >
-          <Text style={styles.categoryButtonText}>Categories</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Add the selected categories display below the search container */}
-      {selectedCategories.length > 0 && (
-        <View style={styles.selectedCategoriesContainer}>
-          {selectedCategories.map((category) => (
-            <View key={category} style={styles.selectedCategory}>
-              <Icon
-                name={categoryIcons[category] as keyof typeof Icon.glyphMap}
-                size={16}
-                style={styles.selectedCategoryIcon}
-              />
-              <Text style={styles.selectedCategoryText}>{category}</Text>
-            </View>
-          ))}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+      <View style={styles.container}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products..."
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          <TouchableOpacity
+            style={styles.categoryButton}
+            onPress={openDrawer} // Opens the custom bottom drawer
+          >
+            <Text style={styles.categoryButtonText}>Categories</Text>
+          </TouchableOpacity>
         </View>
-      )}
 
-      <ScrollView style={styles.container}>
-        {/* Recommended Products Section */}
-        <View style={styles.recommendedSection}>
-          <Text style={styles.sectionTitle}>Recommended for You</Text>
-          <View style={styles.cardsWrapper}>
-            {recommendedProducts.map((product) => (
-              <TouchableOpacity
-                key={product.id}
-                style={[styles.card, styles.recommendedCard]}
-                onPress={() => {
-                  setTargetProductId(product.id);
-                  setModalVisible(true);
-                }}
-              >
-                <View style={styles.recommendedLabel}>
-                  <Text style={styles.recommendedLabelText}>Recommended</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.likeButton}
-                  onPress={() => handleLikeProduct(product.id)}
-                >
-                  <FontAwesome
-                    name={
-                      likedProducts.includes(product.id) ? "heart" : "heart-o"
-                    }
-                    size={24}
-                    color="red"
-                  />
-                </TouchableOpacity>
-                {product.images && product.images.length > 0 ? (
-                  <Image
-                    source={{ uri: product.images[0] }}
-                    style={styles.cardImage}
-                  />
-                ) : (
-                  <Image
-                    source={{ uri: "https://placeholder.com/placeholder.png" }}
-                    style={styles.cardImage}
-                  />
-                )}
-                <View style={styles.cardContent}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productDescription}>
-                    {product.description}
-                  </Text>
-                  <Text style={styles.productPrice}>
-                    {product.priceStart} TL - {product.priceEnd} TL
-                  </Text>
-                  <View style={styles.coinContainer}>
-                    <Text style={styles.productCoins}>
-                      Coins to bid:{" "}
-                      {calculateCoins(product.priceStart, product.priceEnd)}
-                    </Text>
-                    <FontAwesome6 name="coins" size={16} color="#FFD700" />
-                  </View>
-                  <Text style={styles.productCreatedAt}>
-                    Created: {new Date(product.createdAt).toLocaleDateString()}
-                  </Text>
-                  <Text style={styles.bidCount}>
-                    Bids: {bidCounts[product.id] || 0}
-                  </Text>
-                  <View style={styles.ownerInfo}>
-                    <Image
-                      source={{
-                        uri:
-                          ownerPhotos[product.userId]?.photoUrl ||
-                          "https://placeholder.com/user",
-                      }}
-                      style={styles.ownerPhoto}
-                    />
-                    <Text style={styles.ownerNickname}>
-                      {ownerPhotos[product.userId]?.nickname || "NoName"}
-                    </Text>
-                  </View>
-                  <View style={styles.productCategories}>
-                    {Array.isArray(product.categories) &&
-                      product.categories.map((category) => (
-                        <View key={category} style={styles.categoryIcon}>
-                          <Icon
-                            name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
-                            size={16}
-                            color="#555"
-                          />
-                          <Text style={styles.categoryText}>{category}</Text>
-                        </View>
-                      ))}
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.bidButton, { marginTop: 8 }]}
-                    onPress={() => {
-                      setTargetProductId(product.id);
-                      setModalVisible(true);
-                    }}
-                  >
-                    <Text style={styles.buttonText}>Place Bid</Text>
-                  </TouchableOpacity>
-
-                  {/* Reviews Section */}
-                  <View style={styles.reviewsContainer}>
-                    <Text style={styles.reviewsTitle}>Reviews:</Text>
-                    {Array.isArray(reviews[product.id]) &&
-                      reviews[product.id].length > 0 ? (
-                      reviews[product.id].map((review) => (
-                        <View key={review.id} style={styles.reviewItem}>
-                          <Text style={styles.reviewUsername}>
-                            {review.username}
-                          </Text>
-                          <View style={styles.reviewRating}>
-                            {Array.from({ length: 5 }, (_, index) => (
-                              <FontAwesome
-                                key={index}
-                                name={
-                                  index < review.rating ? "star" : "star-o"
-                                }
-                                size={16}
-                                color="#FFD700"
-                              />
-                            ))}
-                          </View>
-                          <Text style={styles.reviewComment}>
-                            {review.comment}
-                          </Text>
-                          <Text style={styles.reviewDate}>
-                            {new Date(review.createdAt).toLocaleDateString()}
-                          </Text>
-                        </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noReviewsText}>No reviews yet.</Text>
-                    )}
-                    {/* Add Review Form */}
-                    <View style={styles.addReviewContainer}>
-                      <View style={styles.starRatingContainer}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <TouchableOpacity
-                            key={star}
-                            onPress={() => {
-                              setNewReview((prev) => ({
-                                ...prev,
-                                [product.id]: {
-                                  rating: star,
-                                  comment: prev[product.id]?.comment || "",
-                                },
-                              }));
-                            }}
-                          >
-                            <FontAwesome
-                              name={
-                                star <= (newReview[product.id]?.rating || 0)
-                                  ? "star"
-                                  : "star-o"
-                              }
-                              size={24}
-                              color="#FFD700"
-                            />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      <TextInput
-                        style={styles.reviewInput}
-                        placeholder="Your Comment"
-                        value={newReview[product.id]?.comment || ""}
-                        onChangeText={(text) =>
-                          setNewReview((prev) => ({
-                            ...prev,
-                            [product.id]: {
-                              rating: prev[product.id]?.rating || 0,
-                              comment: text,
-                            },
-                          }))
-                        }
-                      />
-                      <TouchableOpacity
-                        style={styles.submitReviewButton}
-                        onPress={() => handleSubmitReview(product.id)}
-                      >
-                        <Text style={styles.buttonText}>Submit Review</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  <View style={styles.reviewsContainer}>
-                    {reviews[product.id] && reviews[product.id].length > 0 ? (
-                      <View style={styles.stars}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <FontAwesome
-                            key={star}
-                            name={
-                              reviews[product.id][0].rating >= star
-                                ? "star"
-                                : "star-o"
-                            }
-                            size={16}
-                            color="#FFD700"
-                          // Make stars non-interactive
-                          // Remove onPress handlers
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.noReviewsText}>No ratings yet.</Text>
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
+        {/* Add the selected categories display below the search container */}
+        {selectedCategories.length > 0 && (
+          <View style={styles.selectedCategoriesContainer}>
+            {selectedCategories.map((category) => (
+              <View key={category} style={styles.selectedCategory}>
+                <Icon
+                  name={categoryIcons[category] as keyof typeof Icon.glyphMap}
+                  size={16}
+                  style={styles.selectedCategoryIcon}
+                />
+                <Text style={styles.selectedCategoryText}>{category}</Text>
+              </View>
             ))}
           </View>
-        </View>
+        )}
 
-        <View style={styles.cardsWrapper}>
-          {Array.isArray(filteredProducts) && filteredProducts.length > 0 ? (
-            filteredProducts.map((product) => (
-              <TouchableOpacity
-                key={product.id}
-                style={[
-                  styles.card,
-                  selectedProducts.includes(product.id) &&
-                  styles.selectedProduct,
-                ]}
-              // Removed onPress from the card
-              >
+        <ScrollView style={styles.container}>
+          {/* Recommended Products Section */}
+          <View style={styles.recommendedSection}>
+            <Text style={styles.sectionTitle}>Recommended for You</Text>
+            <View style={styles.cardsWrapper}>
+              {recommendedProducts.map((product) => (
                 <TouchableOpacity
-                  style={styles.likeButton}
-                  onPress={() => handleLikeProduct(product.id)}
+                  key={product.id}
+                  style={[styles.card, styles.recommendedCard]}
+                  onPress={() => {
+                    setTargetProductId(product.id);
+                    setModalVisible(true);
+                  }}
                 >
-                  <FontAwesome
-                    name={
-                      likedProducts.includes(product.id) ? "heart" : "heart-o"
-                    }
-                    size={24}
-                    color="red"
-                  />
-                </TouchableOpacity>
-                {Array.isArray(product.images) && product.images.length > 0 ? (
-                  <Image
-                    source={{ uri: product.images[0] }}
-                    style={styles.cardImage}
-                  />
-                ) : (
-                  <Image
-                    source={{ uri: "https://placeholder.com/placeholder.png" }} // Add a placeholder image URL
-                    style={styles.cardImage}
-                  />
-                )}
-                <View style={styles.cardContent}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <Text style={styles.productDescription}>
-                    {product.description}
-                  </Text>
-                  <Text style={styles.productPrice}>
-                    {product.priceStart} TL - {product.priceEnd} TL
-                  </Text>
-                  <View style={styles.coinContainer}>
-                    <Text style={styles.productCoins}>
-                      Coins to bid:{" "}
-                      {calculateCoins(product.priceStart, product.priceEnd)}
-                    </Text>
-                    <FontAwesome6 name="coins" size={16} color="#FFD700" />
-                  </View>
-                  <Text style={styles.productCreatedAt}>
-                    Created: {new Date(product.createdAt).toLocaleDateString()}
-                  </Text>
-                  <Text style={styles.bidCount}>
-                    Bids: {bidCounts[product.id] || 0}
-                  </Text>
-                  <View style={styles.ownerInfo}>
-                    <Image
-                      source={{
-                        uri:
-                          ownerPhotos[product.userId]?.photoUrl ||
-                          "https://placeholder.com/user",
-                      }}
-                      style={styles.ownerPhoto}
-                    />
-                    <Text style={styles.ownerNickname}>
-                      {ownerPhotos[product.userId]?.nickname || "NoName"}
-                    </Text>
-                  </View>
-                  <View style={styles.productCategories}>
-                    {Array.isArray(product.categories) &&
-                      product.categories.map((category) => (
-                        <View key={category} style={styles.categoryIcon}>
-                          <Icon
-                            name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
-                            size={16}
-                            color="#555"
-                          />
-                          <Text style={styles.categoryText}>{category}</Text>
-                        </View>
-                      ))}
+                  <View style={styles.recommendedLabel}>
+                    <Text style={styles.recommendedLabelText}>Recommended</Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.bidButton, { marginTop: 8 }]}
-                    onPress={() => {
-                      setTargetProductId(product.id);
-                      setModalVisible(true);
-                    }}
+                    style={styles.likeButton}
+                    onPress={() => handleLikeProduct(product.id)}
                   >
-                    <Text style={styles.buttonText}>Place Bid</Text>
+                    <FontAwesome
+                      name={
+                        likedProducts.includes(product.id) ? "heart" : "heart-o"
+                      }
+                      size={24}
+                      color="red"
+                    />
                   </TouchableOpacity>
+                  {product.images && product.images.length > 0 ? (
+                    <Image
+                      source={{ uri: product.images[0] }}
+                      style={styles.cardImage}
+                    />
+                  ) : (
+                    <Image
+                      source={{ uri: "https://placeholder.com/placeholder.png" }}
+                      style={styles.cardImage}
+                    />
+                  )}
+                  <View style={styles.cardContent}>
+                    <Text style={styles.productName}>{product.name}</Text>
+                    <Text style={styles.productDescription}>
+                      {product.description}
+                    </Text>
+                    <Text style={styles.productPrice}>
+                      {product.priceStart} TL - {product.priceEnd} TL
+                    </Text>
+                    <View style={styles.coinContainer}>
+                      <Text style={styles.productCoins}>
+                        Coins to bid:{" "}
+                        {calculateCoins(product.priceStart, product.priceEnd)}
+                      </Text>
+                      <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                    </View>
+                    <Text style={styles.productCreatedAt}>
+                      Created: {new Date(product.createdAt).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.bidCount}>
+                      Bids: {bidCounts[product.id] || 0}
+                    </Text>
+                    <View style={styles.ownerInfo}>
+                      <Image
+                        source={{
+                          uri:
+                            ownerPhotos[product.userId]?.photoUrl ||
+                            "https://placeholder.com/user",
+                        }}
+                        style={styles.ownerPhoto}
+                      />
+                      <Text style={styles.ownerNickname}>
+                        {ownerPhotos[product.userId]?.nickname || "NoName"}
+                      </Text>
+                    </View>
+                    <View style={styles.productCategories}>
+                      {Array.isArray(product.categories) &&
+                        product.categories.map((category) => (
+                          <View key={category} style={styles.categoryIcon}>
+                            <Icon
+                              name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
+                              size={16}
+                              color="#555"
+                            />
+                            <Text style={styles.categoryText}>{category}</Text>
+                          </View>
+                        ))}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.bidButton, { marginTop: 8 }]}
+                      onPress={() => {
+                        setTargetProductId(product.id);
+                        setModalVisible(true);
+                      }}
+                    >
+                      <Text style={styles.buttonText}>Place Bid</Text>
+                    </TouchableOpacity>
 
-                  {/* Reviews Section */}
-                  <View style={styles.reviewsContainer}>
-                    <Text style={styles.reviewsTitle}>Reviews:</Text>
-                    {Array.isArray(reviews[product.id]) &&
-                      reviews[product.id].length > 0 ? (
-                      reviews[product.id].map((review) => (
-                        <View key={review.id} style={styles.reviewItem}>
-                          <Text style={styles.reviewUsername}>
-                            {review.username}
-                          </Text>
-                          <View style={styles.reviewRating}>
-                            {Array.from({ length: 5 }, (_, index) => (
+                    {/* Reviews Section */}
+                    <View style={styles.reviewsContainer}>
+                      <Text style={styles.reviewsTitle}>Reviews:</Text>
+                      {Array.isArray(reviews[product.id]) &&
+                        reviews[product.id].length > 0 ? (
+                        reviews[product.id].map((review) => (
+                          <View key={review.id} style={styles.reviewItem}>
+                            <Text style={styles.reviewUsername}>
+                              {review.username}
+                            </Text>
+                            <View style={styles.reviewRating}>
+                              {Array.from({ length: 5 }, (_, index) => (
+                                <FontAwesome
+                                  key={index}
+                                  name={
+                                    index < review.rating ? "star" : "star-o"
+                                  }
+                                  size={16}
+                                  color="#FFD700"
+                                />
+                              ))}
+                            </View>
+                            <Text style={styles.reviewComment}>
+                              {review.comment}
+                            </Text>
+                            <Text style={styles.reviewDate}>
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.noReviewsText}>No reviews yet.</Text>
+                      )}
+                      {/* Add Review Form */}
+                      <View style={styles.addReviewContainer}>
+                        <View style={styles.starRatingContainer}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <TouchableOpacity
+                              key={star}
+                              onPress={() => {
+                                setNewReview((prev) => ({
+                                  ...prev,
+                                  [product.id]: {
+                                    rating: star,
+                                    comment: prev[product.id]?.comment || "",
+                                  },
+                                }));
+                              }}
+                            >
                               <FontAwesome
-                                key={index}
                                 name={
-                                  index < review.rating ? "star" : "star-o"
+                                  star <= (newReview[product.id]?.rating || 0)
+                                    ? "star"
+                                    : "star-o"
                                 }
-                                size={16}
+                                size={24}
                                 color="#FFD700"
                               />
-                            ))}
-                          </View>
-                          <Text style={styles.reviewComment}>
-                            {review.comment}
-                          </Text>
-                          <Text style={styles.reviewDate}>
-                            {new Date(review.createdAt).toLocaleDateString()}
-                          </Text>
+                            </TouchableOpacity>
+                          ))}
                         </View>
-                      ))
-                    ) : (
-                      <Text style={styles.noReviewsText}>No reviews yet.</Text>
-                    )}
-                    {/* Add Review Form */}
-                    <View style={styles.addReviewContainer}>
-                      <View style={styles.starRatingContainer}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <TouchableOpacity
-                            key={star}
-                            onPress={() => {
-                              setNewReview((prev) => ({
-                                ...prev,
-                                [product.id]: {
-                                  rating: star,
-                                  comment: prev[product.id]?.comment || "",
-                                },
-                              }));
-                            }}
-                          >
+                        <TextInput
+                          style={styles.reviewInput}
+                          placeholder="Your Comment"
+                          value={newReview[product.id]?.comment || ""}
+                          onChangeText={(text) =>
+                            setNewReview((prev) => ({
+                              ...prev,
+                              [product.id]: {
+                                rating: prev[product.id]?.rating || 0,
+                                comment: text,
+                              },
+                            }))
+                          }
+                        />
+                        <TouchableOpacity
+                          style={styles.submitReviewButton}
+                          onPress={() => handleSubmitReview(product.id)}
+                        >
+                          <Text style={styles.buttonText}>Submit Review</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <View style={styles.reviewsContainer}>
+                      {reviews[product.id] && reviews[product.id].length > 0 ? (
+                        <View style={styles.stars}>
+                          {[1, 2, 3, 4, 5].map((star) => (
                             <FontAwesome
+                              key={star}
                               name={
-                                star <= (newReview[product.id]?.rating || 0)
+                                reviews[product.id][0].rating >= star
                                   ? "star"
                                   : "star-o"
                               }
-                              size={24}
+                              size={16}
                               color="#FFD700"
+                            // Make stars non-interactive
+                            // Remove onPress handlers
                             />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      <TextInput
-                        style={styles.reviewInput}
-                        placeholder="Your Comment"
-                        value={newReview[product.id]?.comment || ""}
-                        onChangeText={(text) =>
-                          setNewReview((prev) => ({
-                            ...prev,
-                            [product.id]: {
-                              rating: prev[product.id]?.rating || 0,
-                              comment: text,
-                            },
-                          }))
-                        }
-                      />
-                      <TouchableOpacity
-                        style={styles.submitReviewButton}
-                        onPress={() => handleSubmitReview(product.id)}
-                      >
-                        <Text style={styles.buttonText}>Submit Review</Text>
-                      </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                      )}
                     </View>
                   </View>
-                  <View style={styles.reviewsContainer}>
-                    {reviews[product.id] && reviews[product.id].length > 0 ? (
-                      <View style={styles.stars}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <FontAwesome
-                            key={star}
-                            name={
-                              reviews[product.id][0].rating >= star
-                                ? "star"
-                                : "star-o"
-                            }
-                            size={16}
-                            color="#FFD700"
-                          // Make stars non-interactive
-                          // Remove onPress handlers
-                          />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.cardsWrapper}>
+            {Array.isArray(filteredProducts) && filteredProducts.length > 0 ? (
+              filteredProducts.map((product) => (
+                <TouchableOpacity
+                  key={product.id}
+                  style={[
+                    styles.card,
+                    selectedProducts.includes(product.id) &&
+                    styles.selectedProduct,
+                  ]}
+                // Removed onPress from the card
+                >
+                  <TouchableOpacity
+                    style={styles.likeButton}
+                    onPress={() => handleLikeProduct(product.id)}
+                  >
+                    <FontAwesome
+                      name={
+                        likedProducts.includes(product.id) ? "heart" : "heart-o"
+                      }
+                      size={24}
+                      color="red"
+                    />
+                  </TouchableOpacity>
+                  {Array.isArray(product.images) && product.images.length > 0 ? (
+                    <Image
+                      source={{ uri: product.images[0] }}
+                      style={styles.cardImage}
+                    />
+                  ) : (
+                    <Image
+                      source={{ uri: "https://placeholder.com/placeholder.png" }} // Add a placeholder image URL
+                      style={styles.cardImage}
+                    />
+                  )}
+                  <View style={styles.cardContent}>
+                    <Text style={styles.productName}>{product.name}</Text>
+                    <Text style={styles.productDescription}>
+                      {product.description}
+                    </Text>
+                    <Text style={styles.productPrice}>
+                      {product.priceStart} TL - {product.priceEnd} TL
+                    </Text>
+                    <View style={styles.coinContainer}>
+                      <Text style={styles.productCoins}>
+                        Coins to bid:{" "}
+                        {calculateCoins(product.priceStart, product.priceEnd)}
+                      </Text>
+                      <FontAwesome6 name="coins" size={16} color="#FFD700" />
+                    </View>
+                    <Text style={styles.productCreatedAt}>
+                      Created: {new Date(product.createdAt).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.bidCount}>
+                      Bids: {bidCounts[product.id] || 0}
+                    </Text>
+                    <View style={styles.ownerInfo}>
+                      <Image
+                        source={{
+                          uri:
+                            ownerPhotos[product.userId]?.photoUrl ||
+                            "https://placeholder.com/user",
+                        }}
+                        style={styles.ownerPhoto}
+                      />
+                      <Text style={styles.ownerNickname}>
+                        {ownerPhotos[product.userId]?.nickname || "NoName"}
+                      </Text>
+                    </View>
+                    <View style={styles.productCategories}>
+                      {Array.isArray(product.categories) &&
+                        product.categories.map((category) => (
+                          <View key={category} style={styles.categoryIcon}>
+                            <Icon
+                              name={(categoryIcons[category] as keyof typeof categoryIcons) as any ?? "circle"}
+                              size={16}
+                              color="#555"
+                            />
+                            <Text style={styles.categoryText}>{category}</Text>
+                          </View>
                         ))}
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.bidButton, { marginTop: 8 }]}
+                      onPress={() => {
+                        setTargetProductId(product.id);
+                        setModalVisible(true);
+                      }}
+                    >
+                      <Text style={styles.buttonText}>Place Bid</Text>
+                    </TouchableOpacity>
+
+                    {/* Reviews Section */}
+                    <View style={styles.reviewsContainer}>
+                      <Text style={styles.reviewsTitle}>Reviews:</Text>
+                      {Array.isArray(reviews[product.id]) &&
+                        reviews[product.id].length > 0 ? (
+                        reviews[product.id].map((review) => (
+                          <View key={review.id} style={styles.reviewItem}>
+                            <Text style={styles.reviewUsername}>
+                              {review.username}
+                            </Text>
+                            <View style={styles.reviewRating}>
+                              {Array.from({ length: 5 }, (_, index) => (
+                                <FontAwesome
+                                  key={index}
+                                  name={
+                                    index < review.rating ? "star" : "star-o"
+                                  }
+                                  size={16}
+                                  color="#FFD700"
+                                />
+                              ))}
+                            </View>
+                            <Text style={styles.reviewComment}>
+                              {review.comment}
+                            </Text>
+                            <Text style={styles.reviewDate}>
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.noReviewsText}>No reviews yet.</Text>
+                      )}
+                      {/* Add Review Form */}
+                      <View style={styles.addReviewContainer}>
+                        <View style={styles.starRatingContainer}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <TouchableOpacity
+                              key={star}
+                              onPress={() => {
+                                setNewReview((prev) => ({
+                                  ...prev,
+                                  [product.id]: {
+                                    rating: star,
+                                    comment: prev[product.id]?.comment || "",
+                                  },
+                                }));
+                              }}
+                            >
+                              <FontAwesome
+                                name={
+                                  star <= (newReview[product.id]?.rating || 0)
+                                    ? "star"
+                                    : "star-o"
+                                }
+                                size={24}
+                                color="#FFD700"
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <TextInput
+                          style={styles.reviewInput}
+                          placeholder="Your Comment"
+                          value={newReview[product.id]?.comment || ""}
+                          onChangeText={(text) =>
+                            setNewReview((prev) => ({
+                              ...prev,
+                              [product.id]: {
+                                rating: prev[product.id]?.rating || 0,
+                                comment: text,
+                              },
+                            }))
+                          }
+                        />
+                        <TouchableOpacity
+                          style={styles.submitReviewButton}
+                          onPress={() => handleSubmitReview(product.id)}
+                        >
+                          <Text style={styles.buttonText}>Submit Review</Text>
+                        </TouchableOpacity>
                       </View>
-                    ) : (
-                      <Text style={styles.noReviewsText}>No ratings yet.</Text>
-                    )}
+                    </View>
+                    <View style={styles.reviewsContainer}>
+                      {reviews[product.id] && reviews[product.id].length > 0 ? (
+                        <View style={styles.stars}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <FontAwesome
+                              key={star}
+                              name={
+                                reviews[product.id][0].rating >= star
+                                  ? "star"
+                                  : "star-o"
+                              }
+                              size={16}
+                              color="#FFD700"
+                            // Make stars non-interactive
+                            // Remove onPress handlers
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.noReviewsText}>No ratings yet.</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.noProductsText}>
-              No products available in this category
-            </Text>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Add Modal for category selection */}
-      <Modal
-        visible={isDrawerVisible}
-        transparent
-        animationType="none"
-        onRequestClose={closeDrawer}
-      >
-        {renderContent()}
-      </Modal>
-
-      <Modal
-        visible={isModalVisible}
-        onRequestClose={() => {
-          setModalVisible(false);
-          Alert.alert("Close", "Are you sure you want to close this window?");
-        }}
-        style={styles.modal}
-        transparent={true}
-        animationType="slide"
-      >
-        <ScrollView contentContainerStyle={styles.modalContent}>
-          <MyProductsScreen
-            selectedProducts={selectedProducts}
-            setSelectedProducts={setSelectedProducts}
-          />
-          <View style={styles.buttons}>
-            <TouchableOpacity style={styles.button} onPress={handleBidSubmit}>
-              <Text style={styles.buttonText}>Submit Bid</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.noProductsText}>
+                No products available in this category
+              </Text>
+            )}
           </View>
         </ScrollView>
-      </Modal>
-      {/* Remove the logo container */}
 
-      {/* Buttons Container */}
-      {/* <View style={styles.buttonsContainer}>
+        {/* Add Modal for category selection */}
+        <Modal
+          visible={isDrawerVisible}
+          transparent
+          animationType="none"
+          onRequestClose={closeDrawer}
+        >
+          {renderContent()}
+        </Modal>
+
+        <Modal
+          visible={isModalVisible}
+          onRequestClose={() => {
+            setModalVisible(false);
+            Alert.alert("Close", "Are you sure you want to close this window?");
+          }}
+          style={styles.modal}
+          transparent={true}
+          animationType="slide"
+        >
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <MyProductsScreen
+              selectedProducts={selectedProducts}
+              setSelectedProducts={setSelectedProducts}
+            />
+            <View style={styles.buttons}>
+              <TouchableOpacity style={styles.button} onPress={handleBidSubmit}>
+                <Text style={styles.buttonText}>Submit Bid</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </Modal>
+        {/* Remove the logo container */}
+
+        {/* Buttons Container */}
+        {/* <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.submitButton} onPress={handleBidSubmit}>
           <Text style={styles.buttonText}>Place Bid</Text>
         </TouchableOpacity>
       </View> */}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -1209,6 +1228,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    padding: 4, // Reduced from 8
+    gap: 8, // Added explicit gap
   },
   card: {
     backgroundColor: "white",
@@ -1220,11 +1241,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     width: Platform.select({
-      web: "13%",
-      default: "48%",   // 2 cards per row on mobile
+      web: 'calc((100% - 40px) / 6)', // Reduced gaps between cards
+      default: '48%', // Keep 48% for 2 cards per row with smaller gap
     }),
-    marginBottom: 16,
-    marginHorizontal: "0.5%",
+    marginBottom: 8, // Reduced from 16
   },
   selectedProduct: {
     borderColor: "#007AFF",
@@ -1409,26 +1429,43 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
-    padding: 16,
+    marginBottom: 8, // Reduced from 16
+    padding: 8, // Reduced from 16
     backgroundColor: "#f5f5f5",
-    borderWidth: 1, // Added border width
-    borderColor: "#007AFF", // Added border color
-    borderRadius: 8, // Added border radius for rounded corners
-    shadowColor: "#000", // Added shadow for depth
+    borderWidth: 1,
+    borderColor: "#007AFF",
+    borderRadius: 8,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1, // Reduced shadow opacity
     shadowRadius: 2,
-    elevation: 3, // For Android shadow
+    elevation: 2, // Reduced elevation
+    height: 40, // Added fixed height
   },
   searchInput: {
     flex: 1,
-    backgroundColor: "#ffffff", // Changed background color for contrast
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: "#ffffff",
+    padding: 6, // Reduced from 12
+    borderRadius: 6,
     marginRight: 8,
-    borderWidth: 1, // Added border width
-    borderColor: "#ccc", // Added border color
+    borderWidth: 1,
+    borderColor: "#ccc",
+    height: 30, // Added fixed height
+    fontSize: 14, // Smaller font size
+  },
+  categoryButton: {
+    backgroundColor: "#007AFF",
+    padding: 6, // Reduced from 10
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4, // Reduced from 8
+    height: 30, // Added fixed height
+  },
+  categoryButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 12, // Reduced from 14
   },
   selectCategoriesButton: {
     backgroundColor: "#007AFF",
@@ -1491,19 +1528,6 @@ const styles = StyleSheet.create({
   starRatingContainer: {
     flexDirection: "row",
     marginBottom: 8,
-  },
-  categoryButton: {
-    backgroundColor: "#007AFF",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8, // Added margin for spacing
-  },
-  categoryButtonText: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 14,
   },
   bottomDrawer: {
     justifyContent: "flex-end",

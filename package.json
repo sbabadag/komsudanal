@@ -20,9 +20,10 @@
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-firebase/auth": "^21.6.2",
     "@react-native-picker/picker": "2.9.0",
-    "@react-navigation/bottom-tabs": "^7.0.0",
-    "@react-navigation/drawer": "^7.0.0",
-    "@react-navigation/native": "^7.0.0",
+    "@react-navigation/bottom-tabs": "^7.2.0",
+    "@react-navigation/drawer": "^7.1.1",
+    "@react-navigation/native": "^7.0.14",
+    "@react-navigation/stack": "^7.1.1",
     "brew": "^0.0.8",
     "eas": "^0.1.0",
     "expo": "~52.0.20",
@@ -33,10 +34,11 @@
     "expo-font": "~13.0.1",
     "expo-haptics": "~14.0.0",
     "expo-image-picker": "~16.0.3",
+    "expo-linear-gradient": "~14.0.1",
     "expo-linking": "~7.0.3",
     "expo-notifications": "~0.29.10",
     "expo-random": "^14.0.1",
-    "expo-router": "~4.0.15",
+    "expo-router": "~4.0.17",
     "expo-splash-screen": "~0.29.13",
     "expo-status-bar": "~2.0.0",
     "expo-symbols": "~0.2.0",
@@ -59,11 +61,13 @@
     "react-native-web": "~0.19.13",
     "react-native-webview": "13.12.5",
     "reanimated-bottom-sheet": "^1.0.0-alpha.22",
-    "yarn": "^1.22.22",
-    "expo-linear-gradient": "~14.0.1"
+    "yarn": "^1.22.22"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@babel/plugin-syntax-jsx": "^7.25.9",
+    "@babel/preset-react": "^7.26.3",
+    "@react-native-community/cli": "latest",
     "@types/babel__core": "^7.20.5",
     "@types/babel__generator": "^7.6.8",
     "@types/babel__template": "^7.4.4",
@@ -92,5 +96,14 @@
     "react-test-renderer": "18.3.1",
     "typescript": "^5.3.3"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "scheme": "komsudanal",
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
 }

@@ -2,34 +2,17 @@ import { StyleSheet, Platform, Dimensions } from "react-native";
 
 // Define and export categoryIcons
 
-export const categoryIcons: { [key: string]: string } = {
-  Any: "th-large",
-  Electronics: "tv",
-  Furniture: "home",
-  Clothing: "tshirt",
-  Books: "book",
-  Toys: "puzzle-piece",
-  "Home Appliances": "blender",
-  Garden: "tree",
-  Sports: "futbol-o",
-  Beauty: "heartbeat",
-  Automotive: "car",
-  Health: "medkit",
-  Music: "music",
-  Movies: "film",
-  Games: "gamepad",
-  Jewelry: "diamond",
-  "Pet Supplies": "paw",
-  "Office Supplies": "pencil",
-  "Baby Products": "child",
-  Groceries: "shopping-cart",
-  Art: "paint-brush",
-  Tools: "wrench",
-  Software: "desktop",
-  Photography: "camera",
-  Wearables: "watch",
-  Accessories: "tags",
-};
+export const categoryIcons = {
+  Electronics: 'laptop',
+  Clothing: 'tshirt',
+  Books: 'book',
+  Furniture: 'chair',
+  Sports: 'futbol',
+  // Add more categories as needed
+} as const;
+
+// Add a default export to satisfy the warning
+export default categoryIcons;
 
 export const styles = StyleSheet.create({
   container: {

@@ -19,7 +19,9 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["com.googleusercontent.apps.817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl"]
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.817455873090-4fa79a7qg72nu5tbstivn9li6gg5okhl"
+            ]
           }
         ]
       }
@@ -45,6 +47,14 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "mode": "development"
         }
       ]
     ],
